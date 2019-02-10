@@ -1,8 +1,8 @@
 swagger: "2.0"
 info:
-  description: This is the swagger file that goes with our server code
+  description: Endpoints for the Ethereum blockchain abstraction library.
   version: "1.0.0"
-  title: Swagger ReST Article
+  title: Ethereum blockchain explorer
 consumes:
   - application/json
 produces:
@@ -12,27 +12,500 @@ basePath: /api
 
 # Paths supported by the server application
 paths:
-  /block/{blockHash}:
+  /block/{block_hash}:
     get:
       operationId: src.endpoints.blocks.read_block
       tags:
         - blocks
-      summary: Get information about a block specified by its hash
-      description: Get information about a block specified by its hash
+      summary: Get information about a block specified by its hash.
+      description: Get information about a block specified by its hash.
       parameters:
-        - name: blockHash
+        - name: block_hash
           in: path
-          description: Unique hash of a block
+          description: Unique hash of a block.
           type: string
           required: True
       responses:
         200:
-          description: Successfully gathered 
+          description: Successfully found the block information.
           schema:
-            properties:
-              item1:
-                type: string
-              item2:
-                type: string
-              item3:
-                type: string
+            $ref: '#/definitions/Block'
+  /block-index/{block_index}:
+    get:
+      operationId: src.endpoints.blocks.get_hash_by_index
+      tags:
+        - blocks
+      summary: Get hash of a block specified by its index.
+      description: Get hash of a block specified by its index.
+      parameters:
+        - name: block_index
+          in: path
+          description: Index of the block.
+          type: string
+          required: True
+      responses:
+        200:
+          description: Successfully found the block hash.
+          schema:
+            type: string
+            description: Unique hash of the block.
+  /blocks:
+    get:
+      operationId: src.endpoints.blocks.get_blocks_by_time
+      tags:
+        - blocks
+      summary: Get multiple blocks specified by datetime range.
+      description: Get multiple blocks specified by datetime range.
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum returned blocks.
+          type: string
+          required: False
+        - name: block_start
+          in: query
+          description: Beginning datetime (implicitly begining of the blockchain).
+          type: string
+          required: False
+        - name: block_end
+          in: query
+          description: Ending datetime (implicitly latest block of the blockchain).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the blocks.
+          schema:
+            type: array
+            description: Array of retrieved blocks.
+            items:
+              $ref: '#/definitions/Block'
+  /block-indexes:
+    get:
+      operationId: src.endpoints.blocks.get_blocks_by_indexes
+      tags:
+        - blocks
+      summary: Get multiple blocks specified by index range.
+      description: Get multiple blocks specified by index range.
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum returned blocks.
+          type: string
+          required: False
+        - name: index_start
+          in: query
+          description: Beginning index (implicitly index 1).
+          type: string
+          required: False
+        - name: index_end
+          in: query
+          description: Ending index (implicitly latest latest index).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the blocks by indexes.
+          schema:
+            type: array
+            description: Array of retrieved blocks.
+            items:
+              $ref: '#/definitions/Block'
+  /tx/{tx_hash}:
+    get:
+      operationId: src.endpoints.transactions.read_transaction
+      tags:
+        - transactions
+      summary: Get information about a transaction specified by its hash.
+      description: Get information about a transaction specified by its hash.
+      parameters:
+        - name: tx_hash
+          in: path
+          description: Unique hash of a transaction.
+          type: string
+          required: True
+      responses:
+        200:
+          description: Successfully found the transaction information.
+          schema:
+            $ref: '#/definitions/Transaction'
+  /txs:
+    get:
+      operationId: src.endpoints.transactions.get_transactions_by_bhash
+      tags:
+        - transactions
+      summary: Get all transactions of a block specified by its hash.
+      description: Get all transactions of a block specified by its hash.
+      parameters:
+        - name: block_hash
+          in: query
+          description: Hash of the block.
+          type: string
+          required: True
+      responses:
+        200:
+          description: Successfully retrieved the transactions.
+          schema:
+            type: array
+            description: Array of retrieved transactions.
+            items:
+              $ref: '#/definitions/Transaction'      
+  /txs-index:
+    get:
+      operationId: src.endpoints.transactions.get_transactions_by_bindex
+      tags:
+        - transactions
+      summary: Get all transactions of a block specified by its index.
+      description: Get all transactions of a block specified by its index.
+      parameters:
+        - name: block_index
+          in: query
+          description: Index of the block.
+          type: string
+          required: True
+      responses:
+        200:
+          description: Successfully retrieved the transactions.
+          schema:
+            type: array
+            description: Array of retrieved transactions.
+            items:
+              $ref: '#/definitions/Transaction'     
+  /txs-addr:
+    get:
+      operationId: src.endpoints.transactions.get_transactions_by_address
+      tags:
+        - transactions
+      summary: Get all transactions of a specified address with the possibility to filter by datetimes and amount exchanged.
+      description: Get all transactions of a specified address with the possibility to filter by datetimes and amount exchanged.
+      parameters:
+        - name: address
+          in: query
+          description: Ethereum blockchain address.
+          type: string
+          required: True
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginning of the blockchain).
+          type: string
+          required: false
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: val_from
+          in: query
+          description: Minimum transferred currency (implicitly 0).
+          type: string
+          required: False
+        - name: val_to
+          in: query
+          description: Maximum transferred currency (implicitly infinity).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the transactions.
+          schema:
+            type: array
+            description: Array of retrieved transactions.
+            items:
+              $ref: '#/definitions/Transaction'  
+  /addrs/{addresses}/txs:
+    get:
+      operationId: src.endpoints.transactions.get_transactions_by_addresses
+      tags:
+        - transactions
+      summary: Get all transactions of specified addresses with the possibility to filter by datetimes and amount exchanged.
+      description: Get all transactions of specified addresses with the possibility to filter by datetimes and amount exchanged.
+      parameters:
+        - name: addresses
+          in: path
+          description: Ethereum blockchain address.
+          type: array
+          required: True
+          items:
+            type: string
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginning of the blockchain).
+          type: string
+          required: False
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: val_from
+          in: query
+          description: Minimum transferred currency (implicitly 0).
+          type: string
+          required: False
+        - name: val_to
+          in: query
+          description: Maximum transferred currency (implicitly infinity).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the transactions.
+          schema:
+            type: array
+            description: Array of retrieved transactions.
+            items:
+              $ref: '#/definitions/Transaction'
+  /addr/{addr}:
+    get:
+      operationId: src.endpoints.addresses.read_address
+      tags:
+        - addresses
+      summary: Get information about an address.
+      description: Get information about an address.
+      parameters:
+        - name: addr
+          in: path
+          description: Ethereum blockchain address.
+          type: string
+          required: True
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginnng of the blockchain).
+          type: string
+          required: False
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: val_from
+          in: query
+          description: Minimum transferred currency (implicitly 0).
+          type: string
+          required: False
+        - name: val_to
+          in: query
+          description: Maximum transferred currency (implicitly infinity).
+          type: string
+          required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully found the address information.
+          schema:
+            $ref: '#/definitions/Address'
+  /addr/{addr}/balance:
+    get:
+      operationId: src.endpoints.addresses.get_balance
+      tags:
+        - addresses
+      summary: Get information about a transaction specified by its hash.
+      description: Get information about a transaction specified by its hash.
+      parameters:
+        - name: addr
+          in: path
+          description: Ethereum blockchain address.
+          type: string
+          required: True
+      responses:
+        200:
+          description: Successfully retrieved the address balance.
+          schema:
+            type: string
+  /addrs/{addrs}:
+    get:
+      operationId: src.endpoints.addresses.read_addresses
+      tags:
+        - addresses
+      summary: Get information about multiple addresses.
+      description: Get information about multiple addresses.
+      parameters:
+        - name: addrs
+          in: path
+          description: Ethereum blockchain address.
+          type: array
+          required: True
+          items:
+            type: string
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginnng of the blockchain).
+          type: string
+          required: False
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: val_from
+          in: query
+          description: Minimum transferred currency (implicitly 0).
+          type: string
+          required: False
+        - name: val_to
+          in: query
+          description: Maximum transferred currency (implicitly infinity).
+          type: string
+          required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully found the address information.
+          schema:
+            type: array
+            description: Array of retrieved addresses.
+            items:
+              $ref: '#/definitions/Address'
+
+definitions:
+  Block:
+    type: object
+    properties:
+      number:
+        type: string
+        description: Sequential index of the block.
+      hash:
+        type: string
+        description: Unique hash of the block.
+      parentHash:
+        type: string
+        description: Hash of the parent block.
+      nonce:
+        type: string
+        description: Hash of the generated proof of work.
+      logsBloom:
+        type: string
+        description: Bloom filter for the logs of the block.
+      miner:
+        type: string
+        description: Address of the user who mined this block.
+      difficulty:
+        type: string
+        description: Integer of the difficulty of this block.
+      totalDifficulty:
+        type: string
+        description: Integer of total difficulty of the chain until this block.
+      extraData:
+        type: string
+        description: Extra data field of this block.
+      size:
+        type: string
+        description: The size of the block in bytes.
+      gasLimit:
+        type: string
+        description: Maximum gas allowed in this block.
+      gasUsed:
+        type: string
+        description: Total used gas of all transactions in this block.
+      timestamp:
+        type: string
+        description: Unix timestamp of when the block was generated.
+      transactions:
+        type: array
+        items:
+          $ref: '#/definitions/Transaction'
+      uncles:
+        type: array
+        description: List of uncle hashes.
+        items:
+          type: string
+      blockReward:
+        type: string
+        description: a reward given to the miner.
+  Transaction:
+    type: object
+    properties:
+      blockHash:
+        type: string
+        description: Hash of the block the transaction resides in.
+      blockNumber:
+        type: string
+        description: Index of the transaction's block.
+      from:
+        type: string
+        description: Address of the sender.
+      to:
+        type: string
+        description: Address of the receiver, or new contract address, if the transaction is a contract creation.
+      gas:
+        type: string
+        description: Gas provided by the sender.
+      gasPrice:
+        type: string
+        description: Gas price provided by the sender in Wei.
+      hash:
+        type: string
+        description: Hash of the transaction.
+      input:
+        type: string
+        description: Data sent alog with the transaction.
+      nonce:
+        type: string
+        description: The number of transactions made by sender prior to this one.
+      transactionIndex:
+        type: string
+        description: Integer of transaction's index position in the block.
+      value:
+        type: string
+        description: Value transferred in Wei.
+      cumulativeGasUsed:
+        type: string
+        description: The total amount of gas used when this transaction was executed.
+      gasUsed:
+        type: string
+        description: The amount of gas used by this specific transaction alone.
+      logs:
+        type: string
+        description: List of log objects which the transaction generated.
+      logsBloom:
+        type: string
+        description: Bloom filter for the generated logs.
+      status:
+        type: string
+        description: Either 1 (success) or 0 (failure).
+      contract:
+        type: string
+        description: Either 1 (if the transaction is a contract creation), or 0.
+      timestamp:
+        type: string
+        description: Timestamp of the block this transaction is a part of.
+  Address:
+    type: object
+    properties:
+      address:
+        type: string
+        description: Unique address identifying the account.
+      contract:
+        type: string
+        description: 1 if it's a contract address, otherwise 0.
+      code:
+        type: string
+        description: Code of the contract, or empty if not a contract address.
+      balance:
+        type: string
+        description: The current balance of the address.
+      inputTransactionCount:
+        type: string
+        description: How many transactions is this address the input of.
+      outputTransactionCount:
+        type: string
+        description: How many transactions is this address the output of.
+      inputTransactions:
+        type: string
+        description: List of transactions this address is the input of.
+      outputTransactions:
+        type: string
+        description: List of transactions this address is the output of.
+      mined:
+        type: array
+        description: List of block hshes mined by this address
+        items:
+          type: string

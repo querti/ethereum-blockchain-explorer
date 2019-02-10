@@ -15,7 +15,7 @@ class BlockchainWrapper:
         """
         self.web3 = None
         self._interface = interface
-        if self._interface is '' or 'ipc' in self._interface:
+        if self._interface == '' or 'ipc' in self._interface:
             self._web3 = Web3(Web3.IPCProvider(self._interface))
         elif 'http' in self._interface:
             self._web3 = Web3(Web3.HTTPProvider(self._interface))
@@ -23,5 +23,3 @@ class BlockchainWrapper:
             self._web3 = Web3(Web3.WebsocketProvider(self._interface))
         else:
             self._web3 = Web3()
-        
-    
