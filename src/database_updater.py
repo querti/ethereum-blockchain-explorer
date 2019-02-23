@@ -127,13 +127,15 @@ class DatabaseUpdater:
             address_encode['code'] = addresses['address']['code']
             for input_tx in addresses['address']['inputTransactionHashes']:
                 input_tx_str += ('|' + address_txs[input_tx]['transactionIndex']
-                                 + '+' + address_txs[input_tx]['timestamp'])
+                                 + '+' + address_txs[input_tx]['timestamp']
+                                 + '+' + address_txs[input_tx]['value'])
             if existing_data is None:
                 input_tx_str = input_tx_str[1:]
             address_encode['inputTransactionIndexes'] = input_tx_str
             for output_tx in addresses['address']['outputTransactionHashes']:
                 output_tx_str += ('|' + address_txs[output_tx]['transactionIndex']
-                                  + '+' + address_txs[output_tx]['timestamp'])
+                                  + '+' + address_txs[output_tx]['timestamp']
+                                  + '+' + address_txs[input_tx]['value'])
             if existing_data is None:
                 output_tx_str = output_tx_str[1:]
             address_encode['outputTransactionIndexes'] = output_tx_str

@@ -5,6 +5,7 @@
 from typing import List
 
 from src.common import setup_database
+from src.database_gatherer import DatabaseGatherer
 
 
 @setup_database
@@ -26,18 +27,29 @@ def read_address(address: str,
         no_tx_list: Maximum transactions to gather.
         db: Database instance (meant to be filled by the decorator).
     """
-    pass
+    gatherer = DatabaseGatherer(db)
+    full_address = gatherer.get_address(address, time_from, time_to,
+                                        val_from, val_to, no_tx_list)
+    if full_address is None:
+        return 'Address {} found'.format(address), 404
+
+    return full_address
 
 
 @setup_database
-def get_balance(address: str) -> None:
+def get_balance(address: str, db=None) -> None:
     """
     Get balance of an address.
 
     Args:
         address: Ethereum address.
     """
-    pass
+    gatherer = DatabaseGatherer(db)
+    balance = gatherer.get_balance(address)
+    if balance is None:
+        return 'Address {} found'.format(address), 404
+
+    return balance
 
 
 @setup_database
@@ -59,4 +71,12 @@ def read_addresses(addresses: List[str],
         no_tx_list: Maximum transactions to gather.
         db: Database instance (meant to be filled by the decorator).
     """
-    pass
+    gatherer = DatabaseGatherer(db)
+    full_addresses = []
+    for address in full_addresses:
+        full_addresses.append(gatherer.get_address(address, time_from, time_to,
+                                                   val_from, val_to, no_tx_list))
+    if full_addresses == []:
+        return 'None of the requested addresses found', 404
+
+    return full_addresses

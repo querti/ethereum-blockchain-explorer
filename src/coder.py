@@ -171,7 +171,5 @@ def decode_address(raw_address: bytes) -> Dict:
     address['code'] = address_items[1]
     address['inputTransactionIndexes'] = address_items[2]
     address['outputTransactionIndexes'] = address_items[3]
-    # REWARD????
-    # block['hasREWARD???h'] + '\0'
 
     return address

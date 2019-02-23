@@ -27,7 +27,7 @@ def blockchain_daemon(db_location: str, db_lock: Any, blockchain: Any, refresh: 
     """
     while True:
         sleep(refresh)
-        update_database(db_location, db_lock)
+        update_database(db_location, db_lock, blockchain)
 
 
 def add_args(parser: Any) -> None:
@@ -56,10 +56,11 @@ def main():
     args = parser.parse_args()
 
     db = plyvel.DB(args.dbpath, create_if_missing=True)
-    db.put(b'jeden', b'dva;tri;styri')
     db.close()
     db_lock = Lock()
     blockchain = BlockchainWrapper(args.interface, args.comfirmations)
+    # Before API interface is started, database is created/updated.
+    update_database(args.dbpath, db_lock. block)
     blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
                                                                   db_lock,
                                                                   blockchain,
