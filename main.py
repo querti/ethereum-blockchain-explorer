@@ -4,16 +4,23 @@
 from time import sleep
 from multiprocessing import Process, Lock
 import argparse
+import cProfile
+import os
 
 import connexion
 import plyvel
 from typing import Any
+import logging
 
 from src.database_updater import update_database
 from src.blockchain_wrapper import BlockchainWrapper
 
 # TODO: Add support for history changing??? (stale fork and such)
+# TODO CHANGE THINGS TO TEST BULK
 
+logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
+LOG = logging.getLogger()
+LOG.setLevel(logging.INFO)
 
 def blockchain_daemon(db_location: str, db_lock: Any, blockchain: Any, refresh: int) -> None:
     """
@@ -46,11 +53,19 @@ def add_args(parser: Any) -> None:
     parser.add_argument('--refresh', type=int, default=20,
                         help='How many seconds to wait until the next database refresh.')
 
+def init_data_dir():
+    """Initializes files holding program state values."""
+    if not os.path.exists('./data') or not os.path.isdir('./data'):
+        os.mkdir('./data')
+    
+    if not os.path.exists('./data/progress.txt'):
+        with open('./data/progress.txt', 'w+') as f:
+            f.write('0\n0')
+
 
 def main():
     """Main function."""
-    print('You have started the blockchain explorer.')
-
+    LOG.info('You have started the blockchain explorer.')
     parser = argparse.ArgumentParser()
     add_args(parser)
     args = parser.parse_args()
@@ -58,9 +73,11 @@ def main():
     db = plyvel.DB(args.dbpath, create_if_missing=True)
     db.close()
     db_lock = Lock()
-    blockchain = BlockchainWrapper(args.interface, args.comfirmations)
+    init_data_dir()
+    blockchain = BlockchainWrapper(args.interface, args.confirmations)
     # Before API interface is started, database is created/updated.
-    update_database(args.dbpath, db_lock. block)
+    update_database(args.dbpath, db_lock, blockchain)
+    return
     blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
                                                                   db_lock,
                                                                   blockchain,
@@ -74,4 +91,5 @@ def main():
 
 
 if __name__ == "__main__":
+    # cProfile.run('main()')
     main()

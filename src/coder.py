@@ -1,7 +1,6 @@
 """Set of functions to help encode and decode database entries."""
 from typing import Dict
 
-
 def encode_transaction(transaction: Dict) -> bytes:
     """
     Creates bytes representation of transaction data.
@@ -13,26 +12,40 @@ def encode_transaction(transaction: Dict) -> bytes:
         Bytes to be saved as transaction value in DB.
     """
     tx_str = ''
-    tx_str += transaction['blockHash'] + '\0'
-    tx_str += transaction['blockNumber'] + '\0'
-    tx_str += transaction['from'] + '\0'
-    tx_str += transaction['to'] + '\0'
-    tx_str += transaction['gas'] + '\0'
-    tx_str += transaction['gasPrice'] + '\0'
-    tx_str += transaction['transactionHash'] + '\0'
-    tx_str += transaction['input'] + '\0'
-    tx_str += transaction['nonce'] + '\0'
-    tx_str += transaction['transactionBlockIndex'] + '\0'
-    tx_str += transaction['value'] + '\0'
-    tx_str += transaction['cumulativeGasUsed'] + '\0'
-    tx_str += transaction['gasUsed'] + '\0'
-    tx_str += transaction['logsBloom'] + '\0'
-    tx_str += transaction['status'] + '\0'
-    if transaction['contract'] is None:
-        tx_str += '0\0'
+    tx_str += transaction['blockHash'].hex() + '\0'
+    tx_str += str(transaction['blockNumber']) + '\0'
+    if transaction['from'] is None:
+        tx_str += '/0'
     else:
-        tx_str += '1\0'
-    tx_str += transaction['timestamp']
+        tx_str += transaction['from'] + '\0'
+    if transaction['to'] is None:
+        tx_str += '/0'
+    else:
+        tx_str += transaction['to'] + '\0'
+    tx_str += str(transaction['gas']) + '\0'
+    tx_str += str(transaction['gasPrice']) + '\0'
+    tx_str += transaction['hash'].hex() + '\0'
+    tx_str += transaction['input'] + '\0'
+    tx_str += str(transaction['nonce']) + '\0'
+    tx_str += str(transaction['blockNumber']) + '\0'
+    tx_str += str(transaction['value']) + '\0'
+    tx_str += str(transaction['cumulativeGasUsed']) + '\0'
+    tx_str += str(transaction['gasUsed']) + '\0'
+    # Value not returned
+    # tx_str += transaction['logsBloom'] + '\0'
+    tx_str += '|'.join(str(transaction['logs'])) + '\0'
+    # Status not provided
+    # tx_str += transaction['status'] + '\0'
+    # Contract field is changed to Contrct address
+    # if transaction['contract'] is None:
+    #     tx_str += '0\0'
+    # else:
+    #     tx_str += '1\0'
+    if transaction['contractAddress'] is None:
+        tx_str += '/0'
+    else:
+        tx_str += transaction['contractAddress'] + '\0'
+    tx_str += str(transaction['timestamp'])
 
     return tx_str.encode()
 
@@ -63,10 +76,12 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     transaction['value'] = tx_items[10]
     transaction['cumulativeGasUsed'] = tx_items[11]
     transaction['gasUsed'] = tx_items[12]
-    transaction['logsBloom'] = tx_items[13]
-    transaction['status'] = tx_items[14]
-    transaction['contract'] = tx_items[15]
-    transaction['timestamp'] = tx_items[16]
+    transaction['logs'] = tx_items[13].split('|')
+    # transaction['logsBloom'] = tx_items[13]
+    # transaction['status'] = tx_items[14]
+    #transaction['contract'] = tx_items[14]
+    transaction['contract_address'] = tx_items[14]
+    transaction['timestamp'] = tx_items[15]
 
     return transaction
 
@@ -82,20 +97,20 @@ def encode_block(block: Dict) -> bytes:
         Bytes to be saved as block value in DB.
     """
     block_str = ''
-    block_str += block['hash'] + '\0'
-    block_str += block['parentHash'] + '\0'
-    block_str += block['nonce'] + '\0'
-    block_str += block['logsBloom'] + '\0'
+    block_str += block['hash'].hex() + '\0'
+    block_str += block['parentHash'].hex() + '\0'
+    block_str += block['nonce'].hex() + '\0'
+    block_str += block['logsBloom'].hex() + '\0'
     block_str += block['miner'] + '\0'
-    block_str += block['difficulty'] + '\0'
-    block_str += block['totalDifficulty'] + '\0'
-    block_str += block['extraData'] + '\0'
-    block_str += block['size'] + '\0'
-    block_str += block['gasLimit'] + '\0'
-    block_str += block['gasUsed'] + '\0'
-    block_str += block['timestamp'] + '\0'
+    block_str += str(block['difficulty']) + '\0'
+    block_str += str(block['totalDifficulty']) + '\0'
+    block_str += block['extraData'].hex() + '\0'
+    block_str += str(block['size']) + '\0'
+    block_str += str(block['gasLimit']) + '\0'
+    block_str += str(block['gasUsed']) + '\0'
+    block_str += str(block['timestamp']) + '\0'
     block_str += block['transactionIndexRange'] + '\0'
-    block_str += block['sha3Uncles'] + '\0'
+    block_str += block['sha3Uncles'].hex() + '\0'
     # REWARD?????
     # block_str += block['hasREWARD???h'] + '\0'
 
@@ -146,10 +161,14 @@ def encode_address(address: Dict) -> bytes:
         Bytes to be saved as address value in DB.
     """
     address_str = ''
-    address_str += address['balance'] + '\0'
-    address_str += address['code'] + '\0'
+    address_str += str(address['balance']) + '\0'
+    if isinstance(address['code'], str):
+        address_str += address['code'] + '\0'
+    else:
+        address_str += address['code'].hex() + '\0'
     address_str += address['inputTransactionIndexes'] + '\0'
     address_str += address['outputTransactionIndexes'] + '\0'
+    address_str += address['mined'] +'\0'
 
     return address_str.encode()
 
@@ -171,5 +190,6 @@ def decode_address(raw_address: bytes) -> Dict:
     address['code'] = address_items[1]
     address['inputTransactionIndexes'] = address_items[2]
     address['outputTransactionIndexes'] = address_items[3]
+    address['mined'] = address_items[4]
 
     return address

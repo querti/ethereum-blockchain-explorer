@@ -5,7 +5,7 @@ import logging
 
 import src.coder as coder
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger()
 
 
 class DatabaseGatherer:
@@ -20,8 +20,8 @@ class DatabaseGatherer:
         """
         self.db = db
         self.blocks_db = db.prefixed_db(b'block-')
-        self.block_hash_db = db.prefixed_db(b'block-hash-')
-        self.block_timestamp_db = db.prefixed_db(b'block-timestamp-')
+        self.block_hash_db = db.prefixed_db(b'hash-block-')
+        self.block_timestamp_db = db.prefixed_db(b'timestamp-block')
         self.transaction_db = db.prefixed_db(b'transaction-')
         self.tx_hash_db = db.prefixed_db(b'tx-hash-')
         self.address_db = db.prefixed_db(b'address-')
