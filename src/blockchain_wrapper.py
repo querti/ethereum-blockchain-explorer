@@ -39,6 +39,18 @@ class BlockchainWrapper:
             Current blockchain height.
         """
         return self._web3.eth.blockNumber
+    
+    def get_code(self, address: str) -> str:
+        """
+        Get code of contract address.
+
+        Args:
+            address: Address whose code is gathered.
+        
+        Returns:
+            Address code.
+        """
+        return self._web3.eth.getCode(self._web3.toChecksumAddress(address))
 
     def gather_block(self, block_index: int) -> Union[None, Tuple[Dict, List, Dict]]:
         """

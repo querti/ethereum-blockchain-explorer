@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 
 from src.common import setup_database
-import src.coder as coder
+import src.coders.coder as coder
 
 LOG = logging.getLogger()
 

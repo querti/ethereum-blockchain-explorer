@@ -12,7 +12,8 @@ import plyvel
 from typing import Any
 import logging
 
-from src.database_updater import update_database
+import src.database_updater as database_updater
+import src.bulk_database_updater as bulk_database_updater
 from src.blockchain_wrapper import BlockchainWrapper
 
 # TODO: Add support for history changing??? (stale fork and such)
@@ -34,7 +35,7 @@ def blockchain_daemon(db_location: str, db_lock: Any, blockchain: Any, refresh: 
     """
     while True:
         sleep(refresh)
-        update_database(db_location, db_lock, blockchain)
+        database_updater.update_database(db_location, db_lock, blockchain)
 
 
 def add_args(parser: Any) -> None:
@@ -76,7 +77,11 @@ def main():
     init_data_dir()
     blockchain = BlockchainWrapper(args.interface, args.confirmations)
     # Before API interface is started, database is created/updated.
-    update_database(args.dbpath, db_lock, blockchain)
+    bulk_database_updater.update_database(args.dbpath, db_lock, args.interface,
+                                          args.confirmations, 10000)
+    print('bulk completed')
+    return
+    # update_database(args.dbpath, db_lock, blockchain)
     return
     blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
                                                                   db_lock,

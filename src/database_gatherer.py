@@ -3,7 +3,7 @@
 from typing import Any, List, Dict, Union
 import logging
 
-import src.coder as coder
+import src.coders.coder as coder
 
 LOG = logging.getLogger()
 
