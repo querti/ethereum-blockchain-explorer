@@ -45,11 +45,14 @@ class DatabaseGatherer:
         transaction_range = block['transactionIndexRange'].split('-')
         del block['transactionIndexRange']
         transactions = []  # type: List[Dict[str, Any]]
-
+        print('range: {}'.format(transaction_range))
         it = self.transaction_db.iterator(start=transaction_range[0].encode(),
-                                          end=transaction_range[0].encode(),
+                                          stop=transaction_range[0].encode(),
                                           include_key=False)
+        tx = self.db.get(b'transaction-26334')
+        print('tx: {}'.format(coder.decode_transaction(tx)))
         for raw_tx in it:
+            print('TXXXXXXXXXXXxx')
             transactions.append(coder.decode_transaction(raw_tx))
             block['transactions'] = transactions
 
@@ -89,7 +92,7 @@ class DatabaseGatherer:
         counter = 0
 
         it = self.block_timestamp_db.iterator(start=block_start.encode(),
-                                              end=block_end.encode(),
+                                              stop=block_end.encode(),
                                               include_key=False)
         for block_index in it:
             counter += 1
@@ -101,7 +104,7 @@ class DatabaseGatherer:
             return None
 
         it1 = self.blocks_db.iterator(start=block_indexes[0],
-                                      end=block_indexes[-1],
+                                      stop=block_indexes[-1],
                                       include_key=False)
         for raw_block in it1:
             block = coder.decode_block(raw_block)
@@ -109,7 +112,7 @@ class DatabaseGatherer:
             del block['transactionIndexRange']
             transactions = []  # type: List[Dict[str, Any]]
             it2 = self.transaction_db.iterator(start=transaction_range[0].encode(),
-                                               end=transaction_range[0].encode(),
+                                               stop=transaction_range[0].encode(),
                                                include_key=False)
             for raw_tx in it2:
                 transactions.append(coder.decode_transaction(raw_tx))
@@ -133,7 +136,7 @@ class DatabaseGatherer:
         blocks = []
 
         it1 = self.blocks_db.iterator(start=index_start.encode(),
-                                      end=index_end.encode(),
+                                      stop=index_end.encode(),
                                       include_key=False)
         for raw_block in it1:
             block = coder.decode_block(raw_block)
@@ -142,7 +145,7 @@ class DatabaseGatherer:
             transactions = []  # type: List[Dict[str, Any]]
 
             it2 = self.transaction_db.iterator(start=transaction_range[0].encode(),
-                                               end=transaction_range[0].encode(),
+                                               stop=transaction_range[0].encode(),
                                                include_key=False)
             for raw_tx in it2:
                 transactions.append(coder.decode_transaction(raw_tx))
@@ -194,7 +197,7 @@ class DatabaseGatherer:
         transactions = []  # type: List[Dict[str, Any]]
 
         it = self.transaction_db.iterator(start=transaction_range[0].encode(),
-                                          end=transaction_range[0].encode(),
+                                          stop=transaction_range[0].encode(),
                                           include_key=False)
         for raw_tx in it:
             transactions.append(coder.decode_transaction(raw_tx))
@@ -220,7 +223,7 @@ class DatabaseGatherer:
         transactions = []  # type: List[Dict[str, Any]]
 
         it = self.transaction_db.iterator(start=transaction_range[0].encode(),
-                                          end=transaction_range[0].encode(),
+                                          stop=transaction_range[0].encode(),
                                           include_key=False)
         for raw_tx in it:
             transactions.append(coder.decode_transaction(raw_tx))

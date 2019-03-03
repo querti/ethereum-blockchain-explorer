@@ -15,6 +15,7 @@ import logging
 import src.database_updater as database_updater
 import src.bulk_database_updater as bulk_database_updater
 from src.blockchain_wrapper import BlockchainWrapper
+from src.database_gatherer import DatabaseGatherer
 
 # TODO: Add support for history changing??? (stale fork and such)
 # TODO CHANGE THINGS TO TEST BULK
@@ -53,6 +54,8 @@ def add_args(parser: Any) -> None:
                         help='Minimum number of comfirmations until block can included.')
     parser.add_argument('--refresh', type=int, default=20,
                         help='How many seconds to wait until the next database refresh.')
+    parser.add_argument('--bulk_size', type=int, default=10000,
+                        help='How many blocks should be processed at once.')
 
 def init_data_dir():
     """Initializes files holding program state values."""
@@ -78,16 +81,16 @@ def main():
     blockchain = BlockchainWrapper(args.interface, args.confirmations)
     # Before API interface is started, database is created/updated.
     bulk_database_updater.update_database(args.dbpath, db_lock, args.interface,
-                                          args.confirmations, 10000)
-    print('bulk completed')
-    return
-    # update_database(args.dbpath, db_lock, blockchain)
-    return
-    blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
-                                                                  db_lock,
-                                                                  blockchain,
-                                                                  args.refresh))
-    blockchain_daemon_p.start()
+                                          args.confirmations, args.bulk_size)
+    db = plyvel.DB(args.dbpath, create_if_missing=True)
+    gatherer = DatabaseGatherer(db)
+    block = gatherer.get_block_by_hash('0x2df381612b0e56c17860156ab54df5a6f92bee3dd66d6b6365b674812a367707')
+    print(block)
+    # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
+    #                                                               db_lock,
+    #                                                               blockchain,
+    #                                                               args.refresh))
+    # blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
     app.app.config['DB_LOCK'] = db_lock

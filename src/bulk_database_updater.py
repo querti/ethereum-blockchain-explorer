@@ -58,6 +58,9 @@ class BulkDatabaseUpdater:
                 stop_iteration = True
             else:
                 latest_block = self._highest_block + self._bulk_size
+            
+            if self._highest_block + self._bulk_size > 50000:
+                return
             self.create_csv_files(self._highest_block, latest_block)
             blocks, transactions, addresses = self.gather_blocks()
             addresses = self.fill_addresses(addresses, transactions)
@@ -327,8 +330,8 @@ class BulkDatabaseUpdater:
             for tx_hash, tx_dict in transactions.items():
                 if 'logs' not in tx_dict:
                     tx_dict['logs'] = ''
-                block_value = coder.encode_block(block_dict)
                 tx_value = coder.encode_transaction(tx_dict)
+                print('key: {}'.format(b'transaction-' + str(tx_dict['index']).encode()))
                 self.db.put(b'transaction-' + str(tx_dict['index']).encode(), tx_value)
                 self.db.put(b'tx-hash-' + tx_hash.encode(), str(tx_dict['index']).encode())
             
