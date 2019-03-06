@@ -82,10 +82,6 @@ def main():
     # Before API interface is started, database is created/updated.
     bulk_database_updater.update_database(args.dbpath, db_lock, args.interface,
                                           args.confirmations, args.bulk_size)
-    db = plyvel.DB(args.dbpath, create_if_missing=True)
-    gatherer = DatabaseGatherer(db)
-    block = gatherer.get_block_by_hash('0x2df381612b0e56c17860156ab54df5a6f92bee3dd66d6b6365b674812a367707')
-    print(block)
     # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
     #                                                               db_lock,
     #                                                               blockchain,

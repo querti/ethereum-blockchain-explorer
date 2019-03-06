@@ -57,11 +57,6 @@ paths:
       summary: Get multiple blocks specified by datetime range.
       description: Get multiple blocks specified by datetime range.
       parameters:
-        - name: limit
-          in: query
-          description: Maximum returned blocks.
-          type: string
-          required: False
         - name: block_start
           in: query
           description: Beginning datetime (implicitly begining of the blockchain).
@@ -70,6 +65,11 @@ paths:
         - name: block_end
           in: query
           description: Ending datetime (implicitly latest block of the blockchain).
+          type: string
+          required: False
+        - name: limit
+          in: query
+          description: Maximum returned blocks.
           type: string
           required: False
       responses:
@@ -88,11 +88,6 @@ paths:
       summary: Get multiple blocks specified by index range.
       description: Get multiple blocks specified by index range.
       parameters:
-        - name: limit
-          in: query
-          description: Maximum returned blocks.
-          type: string
-          required: False
         - name: index_start
           in: query
           description: Beginning index (implicitly index 1).

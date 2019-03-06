@@ -326,12 +326,11 @@ class BulkDatabaseUpdater:
                 self.db.put(b'block-' + str(block_dict['number']).encode(), block_value)
                 self.db.put(b'hash-block-' + str(block_dict['hash']).encode(), str(block_dict['number']).encode())
                 self.db.put(b'timestamp-block-' + str(block_dict['timestamp']).encode(), str(block_dict['number']).encode())
-            
+
             for tx_hash, tx_dict in transactions.items():
                 if 'logs' not in tx_dict:
                     tx_dict['logs'] = ''
                 tx_value = coder.encode_transaction(tx_dict)
-                print('key: {}'.format(b'transaction-' + str(tx_dict['index']).encode()))
                 self.db.put(b'transaction-' + str(tx_dict['index']).encode(), tx_value)
                 self.db.put(b'tx-hash-' + tx_hash.encode(), str(tx_dict['index']).encode())
             

@@ -31,20 +31,8 @@ def encode_transaction(transaction: Dict) -> bytes:
     tx_str += transaction['value'] + '\0'
     tx_str += transaction['cumulativeGasUsed'] + '\0'
     tx_str += transaction['gasUsed'] + '\0'
-    # Value not returned
-    # tx_str += transaction['logsBloom'] + '\0'
-    tx_str += '|'.join(transaction['logs']) + '\0'
-    # Status not provided
-    # tx_str += transaction['status'] + '\0'
-    # Contract field is changed to Contrct address
-    # if transaction['contract'] is None:
-    #     tx_str += '0\0'
-    # else:
-    #     tx_str += '1\0'
-    if transaction['contractAddress'] is None:
-        tx_str += '/0'
-    else:
-        tx_str += transaction['contractAddress'] + '\0'
+    tx_str += transaction['logs'] + '\0'
+    tx_str += transaction.get('contractAddress', '') + '\0'
     tx_str += transaction['timestamp']
 
     return tx_str.encode()
@@ -76,7 +64,7 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     transaction['value'] = tx_items[10]
     transaction['cumulativeGasUsed'] = tx_items[11]
     transaction['gasUsed'] = tx_items[12]
-    transaction['logs'] = tx_items[13].split('|')
+    transaction['logs'] = tx_items[13]
     # transaction['logsBloom'] = tx_items[13]
     # transaction['status'] = tx_items[14]
     #transaction['contract'] = tx_items[14]
