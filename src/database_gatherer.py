@@ -188,6 +188,7 @@ class DatabaseGatherer:
         """
         tx_index = self.tx_hash_db.get(tx_hash.encode()).decode()
         if tx_index is None:
+            LOG.info('Transaction of given hash not found.')
             return None
 
         raw_tx = self.transaction_db(tx_index.encode())

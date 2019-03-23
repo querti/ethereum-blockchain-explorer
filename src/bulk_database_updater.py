@@ -1,17 +1,20 @@
 """Class that updates the database in bulk fashion."""
 # from multiprocessing import Lock
-from typing import Any, Tuple, List, Dict
+from typing import Any, Tuple, List, Dict, Set
 import logging
 from datetime import datetime
 import subprocess
 import csv
 import os
+import sys
 
 import pandas
+import numpy
 
 from src.common import setup_database
 import src.coders.bulkcoder as coder
 from src.blockchain_wrapper import BlockchainWrapper
+from src.requests.balances import BalanceGatherer
 
 LOG = logging.getLogger()
 
@@ -51,7 +54,11 @@ class BulkDatabaseUpdater:
     def fill_database(self) -> None:
         """Adds new entries to the database"""
         stop_iteration = False
+        numpy_array = None
+        batch_index = 0
         while True:
+            batch_index += 1
+            # calculate batch range
             last_block = self._blockchain.get_height() - self._confirmations
             if self._highest_block + self._bulk_size > last_block:
                 latest_block = last_block
@@ -60,18 +67,38 @@ class BulkDatabaseUpdater:
                 latest_block = self._highest_block + self._bulk_size
             
             if self._highest_block + self._bulk_size > 50000:
-                return
+                break
+
+            # Get data from Node
             self.create_csv_files(self._highest_block, latest_block)
+
+            # Parse the data
             blocks, transactions, addresses = self.gather_blocks()
+            if numpy_array is None:
+                numpy_array = numpy.unique(numpy.array(list(addresses.keys())))
+            else:
+                numpy_array = numpy.union1d(numpy_array, numpy.array(list(addresses.keys())))
+            # addr_set = addr_set.union(addresses.keys())
+            if batch_index % 10 == 0:
+                self._save_addresses(numpy_array)
+                numpy_array = None
+
             addresses = self.fill_addresses(addresses, transactions)
             self.update_bulk_db(blocks, transactions, addresses)
             self._highest_block = latest_block
             with open('./data/progress.txt', 'w') as f:
                 f.write('{}\n{}'.format(self._highest_block, self._highest_tx))
+
             if stop_iteration:
                 break
             percentage = (self._highest_block / last_block) * 100
             LOG.info('Blockchain syncing: {:.2f}% done.'.format(percentage))
+        
+        if numpy_array is not None:
+            self._save_addresses(numpy_array)
+        print('done :)')
+        # Update balances of all addresses
+        self._update_address_balances(last_block)
             
         LOG.info('Bulk database update complete.')
     
@@ -337,6 +364,68 @@ class BulkDatabaseUpdater:
             for addr_hash, addr_dict in addresses.items():
                 address_value = coder.encode_address(addr_dict)
                 self.db.put(b'address-' + str(addr_hash).encode(), address_value)
+    
+    def _save_addresses(self, addresses: Any) -> None:
+        """
+        Saves addresses of a batch to a temporary file.
+
+        Args:
+            addresses: Numpy array containing unique addresses.
+        """
+        if os.path.isfile('data/addresses.npy'):
+            existing_addr = numpy.load('data/addresses.npy')
+            new_addr = numpy.union1d(existing_addr, addresses)
+            numpy.save('data/addresses.npy', new_addr)
+        else:
+            numpy.save('data/addresses.npy', addresses)
+
+    def _update_address_balances(self, blockchain_height: int) -> None:
+        """
+        Load relevant addresses from tmp file, get their balances from Node and save them to DB.
+
+        During this update new data will be added to blockchain and thus the DB will be out of date
+        by the time it is completed. Small out of date-ness is acceptable but a longer one 
+        will probabbly need to trigger a new batch update.
+
+        Args:
+            blockchain_height: Height at which sync was completed.
+        """
+        balance_gatherer = BalanceGatherer(self._interface)
+        existing_addr = numpy.load('data/addresses.npy')
+        size = existing_addr.size
+        index = 0
+        continue_iteration = True
+        while continue_iteration:
+            if index + self._bulk_size > size:
+                sliced_arr = existing_addr[index:]
+                continue_iteration = False
+            else:
+                sliced_arr = existing_addr[index:index + self._bulk_size]
+                index = index + self._bulk_size
+            
+            addresses = sliced_arr.tolist()
+            balances = balance_gatherer._gather_balances(addresses, blockchain_height)
+            self._update_db_balances(balances)
+        
+        if os.path.exists('data/addresses.npy'):
+            os.remove('data/addresses.npy')
+
+    def _update_db_balances(self, addr_balances: Dict) -> None:
+        """
+        Updates balances of Ethereum addresses.
+
+        Args:
+            addr_balances: Dictionary containing 'address: balance' entries.
+        """
+        address_objects = {}
+        for address in addr_balances:
+            raw_addr = self.address_db.get(str(address).encode())
+            address_objects[address] = coder.decode_address(raw_addr)
+            address_objects[address]['balance'] = addr_balances[address]
+        with self.db.write_batch() as wb:
+            for address in address_objects:
+                address_value = coder.encode_address(address_objects[address])
+                self.db.put(b'address-' + str(address).encode(), address_value)
 
 @setup_database
 def update_database(db_location: str,

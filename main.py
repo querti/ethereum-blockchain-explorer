@@ -6,6 +6,7 @@ from multiprocessing import Process, Lock
 import argparse
 import cProfile
 import os
+import sys
 
 import connexion
 import plyvel
@@ -82,6 +83,7 @@ def main():
     # Before API interface is started, database is created/updated.
     bulk_database_updater.update_database(args.dbpath, db_lock, args.interface,
                                           args.confirmations, args.bulk_size)
+    sys.exit(0)
     # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
     #                                                               db_lock,
     #                                                               blockchain,
