@@ -1,5 +1,5 @@
 """Separate coder for bulk updating, as the data have a different format."""
-from typing import Dict
+from typing import Dict, List
 
 def encode_transaction(transaction: Dict) -> bytes:
     """
@@ -154,6 +154,12 @@ def encode_address(address: Dict) -> bytes:
     address_str += address['inputTransactionIndexes'] + '\0'
     address_str += address['outputTransactionIndexes'] + '\0'
     address_str += address['mined'] +'\0'
+    address_str += address['tokenContract'] +'\0'
+    address_str += address['inputTokenTransactions'] +'\0'
+    address_str += address['outputTokenTransactions'] +'\0'
+    address_str += address['ERC20Balances'] +'\0'
+    address_str += address['ERC721Tokens'] +'\0'
+        
 
     return address_str.encode()
 
@@ -176,5 +182,119 @@ def decode_address(raw_address: bytes) -> Dict:
     address['inputTransactionIndexes'] = address_items[2]
     address['outputTransactionIndexes'] = address_items[3]
     address['mined'] = address_items[4]
+    address['tokenContract'] = address_items[5]
+    address['inputTokenTransactions'] = address_items[6]
+    address['outputTokenTransactions'] = address_items[7]
+    address['ERC20Balances'] = address_items[8]
+    address['ERC721Tokens'] = address_items[9]
 
     return address
+
+def encode_token(token: Dict) -> bytes:
+    """
+    Creates bytes representation of token data.
+
+    args:
+        token: Dictionary containing the token data.
+
+    returns:
+        Bytes to be saved as token value in DB.
+    """
+    token_str = ''
+    token_str += token['symbol'] + '\0'
+    token_str += token['name'] + '\0'
+    token_str += token['decimals'] + '\0'
+    token_str += token['total_supply'] + '\0'
+    token_str += token['type'] +'\0'
+
+    return token_str.encode()
+
+
+def decode_token(raw_token: bytes) -> Dict:
+    """
+    Decodes bytes representation of an token into token dictionary.
+
+    Args:
+        raw_token: Bytes representing a token.
+
+    Returns:
+        Token in dictionary form.
+    """
+    token_items = raw_token.decode().split('\0')
+    token = {}
+
+    token['symbol'] = token_items[0]
+    token['name'] = token_items[1]
+    token['decimals'] = token_items[2]
+    token['total_supply'] = token_items[3]
+    token['type'] = token_items[4]
+
+    return token
+
+def encode_erc20_balances(erc20_balances: Dict) -> str:
+    """
+    Encodes dictionary containing ERC-20 balances into a string.
+
+    Args:
+        erc20_balances: Dictionary of balances.
+    
+    Returns:
+        String representing address balances.
+    """
+    erc20_balances_str = ''
+    for addr, balance in erc20_balances.items():
+        erc20_balances_str += '|' + addr + '+' + str(balance)
+    
+    return erc20_balances_str[1:]
+
+def decode_erc20_balances(erc20_balances_str: str) -> Dict:
+    """
+    Decodes string of ERC-20 balances of an address into a dictionary.
+
+    Args:
+        erc20_balances_str: String representing current erc-20 balances.
+    
+    Returns:
+        Dictionary containing all balances.
+    """
+    balances = {}
+    for token in erc20_balances_str.split('|'):
+            token_address, balance = token.split('+')
+            balances['token_address'] = int(balance)
+
+    return balances
+
+def encode_erc721_records(erc721_records: Dict[str, List]) -> str:
+    """
+    Encodes dictionary containing ERC-721 records into a string.
+
+    Args:
+        erc721_records: Dictionary of owned items.
+    
+    Returns:
+        String representing address's owned items.
+    """
+    erc721_records_str = ''
+    for addr, items in erc721_records.items():
+        erc20_balances_str += '|' + addr
+        for item in items:
+            erc20_balances_str += '+' + item
+    
+    return erc20_balances_str[1:]
+
+def decode_erc721_records(erc721_records_str: str) -> Dict[str, List]:
+    """
+    Decodes string of ERC-721 items of an address into a dictionary.
+
+    Args:
+        erc721_records_str: String representing current erc-721 items.
+    
+    Returns:
+        Dictionary containing all address's items.
+    """
+    items = {}
+    for token in erc721_records_str.split('|'):
+            records = token.split('+')
+            items[records[0]] = records[1:]
+
+    return items

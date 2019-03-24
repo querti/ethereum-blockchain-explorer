@@ -1,6 +1,6 @@
 """Functions used in multiple modules."""
 
-from typing import Callable
+from typing import Callable, Dict
 import plyvel
 from flask import current_app
 

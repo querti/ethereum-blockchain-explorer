@@ -18,8 +18,11 @@ import src.bulk_database_updater as bulk_database_updater
 from src.blockchain_wrapper import BlockchainWrapper
 from src.database_gatherer import DatabaseGatherer
 
-# TODO: Add support for history changing??? (stale fork and such)
-# TODO CHANGE THINGS TO TEST BULK
+# TODO: CHANGE THINGS TO TEST BULK
+# TODO: Add traces
+# TODO: Add token transactions
+# TODO: Save addresses to pytables??
+# TODO: Implement token gathering.
 
 logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
