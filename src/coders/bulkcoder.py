@@ -242,6 +242,8 @@ def encode_erc20_balances(erc20_balances: Dict) -> str:
         String representing address balances.
     """
     erc20_balances_str = ''
+    if not erc20_balances:
+        return ''
     for addr, balance in erc20_balances.items():
         erc20_balances_str += '|' + addr + '+' + str(balance)
     
@@ -258,7 +260,10 @@ def decode_erc20_balances(erc20_balances_str: str) -> Dict:
         Dictionary containing all balances.
     """
     balances = {}
+    if erc20_balances_str == '':
+        return {}
     for token in erc20_balances_str.split('|'):
+            print(token)
             token_address, balance = token.split('+')
             balances['token_address'] = int(balance)
 
@@ -275,12 +280,14 @@ def encode_erc721_records(erc721_records: Dict[str, List]) -> str:
         String representing address's owned items.
     """
     erc721_records_str = ''
+    if not erc721_records:
+        return ''
     for addr, items in erc721_records.items():
         erc20_balances_str += '|' + addr
         for item in items:
             erc20_balances_str += '+' + item
     
-    return erc20_balances_str[1:]
+    return erc721_records_str[1:]
 
 def decode_erc721_records(erc721_records_str: str) -> Dict[str, List]:
     """
@@ -293,6 +300,8 @@ def decode_erc721_records(erc721_records_str: str) -> Dict[str, List]:
         Dictionary containing all address's items.
     """
     items = {}
+    if erc721_records_str == '':
+        return {}
     for token in erc721_records_str.split('|'):
             records = token.split('+')
             items[records[0]] = records[1:]
