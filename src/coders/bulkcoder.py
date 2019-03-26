@@ -157,8 +157,6 @@ def encode_address(address: Dict) -> bytes:
     address_str += address['tokenContract'] +'\0'
     address_str += address['inputTokenTransactions'] +'\0'
     address_str += address['outputTokenTransactions'] +'\0'
-    address_str += address['ERC20Balances'] +'\0'
-    address_str += address['ERC721Tokens'] +'\0'
         
 
     return address_str.encode()
@@ -185,8 +183,6 @@ def decode_address(raw_address: bytes) -> Dict:
     address['tokenContract'] = address_items[5]
     address['inputTokenTransactions'] = address_items[6]
     address['outputTokenTransactions'] = address_items[7]
-    address['ERC20Balances'] = address_items[8]
-    address['ERC721Tokens'] = address_items[9]
 
     return address
 
@@ -246,7 +242,6 @@ def encode_erc20_balances(erc20_balances: Dict) -> str:
         return ''
     for addr, balance in erc20_balances.items():
         erc20_balances_str += '|' + addr + '+' + str(balance)
-    
     return erc20_balances_str[1:]
 
 def decode_erc20_balances(erc20_balances_str: str) -> Dict:
@@ -263,7 +258,6 @@ def decode_erc20_balances(erc20_balances_str: str) -> Dict:
     if erc20_balances_str == '':
         return {}
     for token in erc20_balances_str.split('|'):
-            print(token)
             token_address, balance = token.split('+')
             balances['token_address'] = int(balance)
 

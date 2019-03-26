@@ -29,7 +29,9 @@ class BulkDatabaseUpdater:
                        interface: int,
                        confirmations: int,
                        bulk_size: int,
-                       process_traces: bool = False) -> None:
+                       process_traces: bool = False,
+                       datapath: str = 'data/',
+                       gather_tokens_arg: bool = True) -> None:
         """
         Initialization.
 
@@ -42,15 +44,20 @@ class BulkDatabaseUpdater:
                 confirmations: How many confirmations a block has to have.
                 bulk_size: How many blocks to be included in bulk DB update.
                 process_traces: Whether to get addresses from traces.
+                datapath: Path for temporary file created in DB creation.
+                gather_tokens: Whether to also gather token information
         """
         self._blockchain = BlockchainWrapper(interface, confirmations)
         self.db = db
         self._confirmations = confirmations
         self._bulk_size = bulk_size
         self.process_traces = process_traces
+        self.datapath = datapath
+        self.gather_tokens_arg = gather_tokens_arg
+        print(self.gather_tokens_arg)
         self.address_db = db.prefixed_db(b'address-')
         self.token_db = db.prefixed_db(b'token-')
-        with open('./data/progress.txt', 'r') as f:
+        with open(self.datapath + 'progress.txt', 'r') as f:
             self._highest_block, self._highest_tx = f.read().split('\n')
             self._highest_block = int(self._highest_block)
             self._highest_tx = int(self._highest_tx)
@@ -60,10 +67,9 @@ class BulkDatabaseUpdater:
         else:
             self._interface = interface
         
-    def fill_database(self) -> None:
+    def fill_database(self) -> bool:
         """Adds new entries to the database"""
         stop_iteration = False
-        numpy_array = None
         batch_index = 0
         while True:
             batch_index += 1
@@ -75,7 +81,7 @@ class BulkDatabaseUpdater:
             else:
                 latest_block = self._highest_block + self._bulk_size
             
-            if self._highest_block + self._bulk_size > 50000:
+            if self._highest_block + self._bulk_size > 30000:
                 break
 
             # Get data from Node
@@ -83,21 +89,20 @@ class BulkDatabaseUpdater:
 
             # Parse the data
             blocks, transactions, addresses = self.gather_blocks()
-            tokens, token_txs = self.gather_tokens()
-            if numpy_array is None:
-                numpy_array = numpy.unique(numpy.array(list(addresses.keys())))
+            if self.gather_tokens_arg:
+                tokens, token_txs = self.gather_tokens()
             else:
-                numpy_array = numpy.union1d(numpy_array, numpy.array(list(addresses.keys())))
-            # addr_set = addr_set.union(addresses.keys())
-            if batch_index % 10 == 0:
-                self._save_addresses(numpy_array)
-                numpy_array = None
+                tokens, token_txs = ({}, {})
             if self.process_traces:
                 addresses = self.add_trace_addresses(addresses, self._highest_block, latest_block)
+            if batch_index % 10 == 0:
+                self._save_addresses(addresses, True)
+            else:
+                self._save_addresses(addresses, False)
             addresses = self.fill_addresses(addresses, transactions, tokens, token_txs)
             self.update_bulk_db(blocks, transactions, addresses, tokens)
             self._highest_block = latest_block
-            with open('./data/progress.txt', 'w') as f:
+            with open(self.datapath + 'progress.txt', 'w') as f:
                 f.write('{}\n{}'.format(self._highest_block, self._highest_tx))
 
             if stop_iteration:
@@ -105,11 +110,14 @@ class BulkDatabaseUpdater:
             percentage = (self._highest_block / last_block) * 100
             LOG.info('Blockchain syncing: {:.2f}% done.'.format(percentage))
         
-        if numpy_array is not None:
-            self._save_addresses(numpy_array)
-        print('done :)')
         # Update balances of all addresses
+        self._save_addresses({}, False)
         self._update_address_balances(last_block)
+
+        if self._blockchain.get_height() - self._confirmations - last_block > 10:
+            return False
+        else:
+            return True
             
         LOG.info('Bulk database update complete.')
     
@@ -125,28 +133,29 @@ class BulkDatabaseUpdater:
         block_tx_cmd = "ethereumetl export_blocks_and_transactions --start-block {} " \
                        "--end-block {} --provider-uri {} --blocks-output {} " \
                        "--transactions-output {}".format(first_block, last_block,
-                       self._interface, './data/blocks.csv', './data/transactions.csv')
+                       self._interface, self.datapath + 'blocks.csv', self.datapath + 'transactions.csv')
         subprocess.call(block_tx_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         #output, error = process.communicate()
         # transactions have to be in a correct order, with 2 keys: block_num, tx_index
-        df = pandas.read_csv('./data/transactions.csv')
+        df = pandas.read_csv(self.datapath + 'transactions.csv')
         df = df.sort_values(['block_number', 'transaction_index'], ascending=[True, True])
-        df.to_csv('./data/transactions.csv', index=False)
+        df.to_csv(self.datapath + 'transactions.csv', index=False)
 
         # Get transaction hashes
         tx_hash_cmd = "ethereumetl extract_csv_column --input {} --column hash " \
-                      "--output {}".format('./data/transactions.csv', './data/tx_hashes.txt')
+                      "--output {}".format(self.datapath + 'transactions.csv', self.datapath + 'tx_hashes.txt')
         subprocess.call(tx_hash_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         #output, error = process.communicate()
         
         # Get receipts
         tx_receipts_cmd = "ethereumetl export_receipts_and_logs --transaction-hashes {} " \
                           " --provider-uri {} --receipts-output {} " \
-                          "--logs-output {}".format('./data/tx_hashes.txt', self._interface,
-                          './data/receipts.csv', './data/logs.csv')
+                          "--logs-output {}".format(self.datapath + '/tx_hashes.txt', self._interface,
+                          self.datapath + 'receipts.csv', self.datapath + 'logs.csv')
         subprocess.call(tx_receipts_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         #output, error = process.communicate()
-        self.create_token_csv(first_block, last_block)
+        if self.gather_tokens_arg:
+            self.create_token_csv(first_block, last_block)
 
     def create_token_csv(self, first_block: int, last_block: int) -> None:
         """
@@ -159,40 +168,40 @@ class BulkDatabaseUpdater:
         # get contract addresses
         contracts_addr_cmd = "ethereumetl extract_csv_column --input {} " \
                              " --column contract_address " \
-                             "--output {}".format('./data/receipts.csv',
-                                                  './data/contract_addresses.txt')
+                             "--output {}".format(self.datapath + 'receipts.csv',
+                                                  self.datapath + 'contract_addresses.txt')
         subprocess.call(contracts_addr_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # get contracts
         # This is a bottleneck basically
         contracts_cmd = "ethereumetl export_contracts --contract-addresses {} " \
                         " --provider-uri {} " \
-                        "--output {} ".format('./data/contract_addresses.txt', self._interface,
-                        './data/contracts.csv')
+                        "--output {} ".format(self.datapath + 'contract_addresses.txt', self._interface,
+                        self.datapath + 'contracts.csv')
         subprocess.call(contracts_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Extract token addresses
-        if os.path.isfile('./data/contracts.csv'):
+        if os.path.isfile(self.datapath + 'contracts.csv'):
             data = []
-            with open('./data/contracts.csv') as f:
+            with open(self.datapath + 'contracts.csv') as f:
                 for row in csv.DictReader(f,  delimiter=','):
                     if row['is_erc20'] == 'True' or row['is_erc721'] == 'True':
                         data.append(row['address'])
-            with open('./data/token_addresses.txt', 'w') as f:
+            with open(self.datapath + 'token_addresses.txt', 'w') as f:
                 f.write('\n'.join(data))
        
         # get Tokens
         tokens_cmd = "ethereumetl export_tokens --token-addresses {} " \
                      " --provider-uri {} " \
-                     "--output {} ".format('./data/token_addresses.txt', self._interface,
-                     './data/tokens.csv')
+                     "--output {} ".format(self.datapath + 'token_addresses.txt', self._interface,
+                     self.datapath + 'tokens.csv')
         subprocess.call(tokens_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         token_tx_cmd = "ethereumetl extract_token_transfers --logs {} " \
-                       "--output {}".format('./data/logs.csv', './data/token_transfers.csv')
+                       "--output {}".format(self.datapath + 'logs.csv', self.datapath + 'token_transfers.csv')
         subprocess.call(token_tx_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    def gather_tokens(self) -> Dict:
+    def gather_tokens(self) -> Tuple[Dict, Dict]:
         """
         Gathers information about newly created ERC-20 and ERC-721 tokens.
 
@@ -200,7 +209,7 @@ class BulkDatabaseUpdater:
             Dictionary of format 'address: token_data', List of token transactions.
         """
         tokens = {}
-        with open('./data/tokens.csv') as csv_f:
+        with open(self.datapath + 'tokens.csv') as csv_f:
             csv_tokens = csv.DictReader(csv_f, delimiter=',')
             for row in csv_tokens:
                 token = {}
@@ -210,7 +219,7 @@ class BulkDatabaseUpdater:
                 token['total_supply'] = row['total_supply']
                 tokens[row['address']] = token
         
-        with open('./data/contracts.csv') as csv_f:
+        with open(self.datapath + 'contracts.csv') as csv_f:
             csv_contracts = csv.DictReader(csv_f, delimiter=',')
             for row in csv_contracts:
                 if row['address'] in tokens:
@@ -220,7 +229,7 @@ class BulkDatabaseUpdater:
                         tokens[row['address']]['type'] = 'ERC-721'
         
         token_txs = []
-        with open('./data/token_transfers.csv') as csv_f:
+        with open(self.datapath + 'token_transfers.csv') as csv_f:
             csv_tokens_tx = csv.DictReader(csv_f, delimiter=',')
             for row in csv_tokens_tx:
                 token_tx = {}
@@ -242,7 +251,7 @@ class BulkDatabaseUpdater:
         """
         blocks = {}
         miners = []
-        with open('./data/blocks.csv') as csv_f:
+        with open(self.datapath + 'blocks.csv') as csv_f:
             csv_blocks = csv.DictReader(csv_f, delimiter=',')
             for row in csv_blocks:
                 block = {}
@@ -272,9 +281,7 @@ class BulkDatabaseUpdater:
                                                 'code': '0x',
                                                 'mined': [miner[1]],
                                                 'inputTokenTransactions': [],
-                                                'outputTokenTransactions': [],
-                                                'ERC20Balances': [],
-                                                'ERC721Tokens': []}
+                                                'outputTokenTransactions': []}
             elif miner[0] is not None:
                 addresses[miner[0]]['mined'].append(miner[1])
         
@@ -297,7 +304,7 @@ class BulkDatabaseUpdater:
         current_highest_tx = None
         self.tx_hash_order = []
         first_receipt_tx = self._highest_tx
-        with open('./data/transactions.csv') as csv_f:
+        with open(self.datapath + 'transactions.csv') as csv_f:
             csv_transactions = csv.DictReader(csv_f, delimiter=',')
             for row in csv_transactions:
                 transaction = {}
@@ -337,9 +344,7 @@ class BulkDatabaseUpdater:
                                                     'code': '0x',
                                                     'mined': [],
                                                     'inputTokenTransactions': [],
-                                                    'outputTokenTransactions': [],
-                                                    'ERC20Balances': [],
-                                                    'ERC721Tokens': []}
+                                                    'outputTokenTransactions': []}
                 elif transaction['from'] is not None:
                     addresses[transaction['from']]['inputTransactionHashes'].append(transaction['hash'])
 
@@ -349,9 +354,7 @@ class BulkDatabaseUpdater:
                                                     'code': '0x',
                                                     'mined': [],
                                                     'inputTokenTransactions': [],
-                                                    'outputTokenTransactions': [],
-                                                    'ERC20Balances': [],
-                                                    'ERC721Tokens': []}
+                                                    'outputTokenTransactions': []}
                 elif transaction['to'] is not None:
                     addresses[transaction['to']]['outputTransactionHashes'].append(transaction['hash'])
                 transactions[transaction['hash']] = transaction
@@ -371,7 +374,7 @@ class BulkDatabaseUpdater:
             transactions: Dictionary holding all currently proccessed transactions.
             addresses: Dictionary holding all currently processed addresses.
         """
-        with open('./data/receipts.csv') as csv_f:
+        with open(self.datapath + 'receipts.csv') as csv_f:
             csv_receipts = csv.DictReader(csv_f, delimiter=',')
             for row in csv_receipts:
                 transactions[row['transaction_hash']]['cumulativeGasUsed'] = row['cumulative_gas_used']
@@ -386,10 +389,8 @@ class BulkDatabaseUpdater:
                                                     'code': code.hex(),
                                                     'mined': [],
                                                     'inputTokenTransactions': [],
-                                                    'outputTokenTransactions': [],
-                                                    'ERC20Balances': [],
-                                                    'ERC721Tokens': []}
-        with open('./data/logs.csv') as csv_f:
+                                                    'outputTokenTransactions': []}
+        with open(self.datapath + 'logs.csv') as csv_f:
             csv_logs = csv.DictReader(csv_f, delimiter=',')
             for row in csv_logs:
                 transactions[row['transaction_hash']]['logs'] = row['data']
@@ -418,9 +419,7 @@ class BulkDatabaseUpdater:
                                       'code': '0x',
                                       'mined': [],
                                       'inputTokenTransactions': [],
-                                      'outputTokenTransactions': [],
-                                      'ERC20Balances': [],
-                                      'ERC721Tokens': []}
+                                      'outputTokenTransactions': []}
         
         return addresses
 
@@ -450,16 +449,12 @@ class BulkDatabaseUpdater:
                 mined_str = existing_address['mined']
                 input_token_txs_str = existing_address['inputTokenTransactions']
                 output_token_txs_str = existing_address['outputTokenTransactions']
-                erc20_balances_str = existing_address['ERC20Balances']
-                erc721_tokens_str = existing_address['ERC721Tokens']
             else:
                 input_tx_str = ''
                 output_tx_str = ''
                 mined_str = ''
                 input_token_txs_str = ''
                 output_token_txs_str = ''
-                erc20_balances_str = ''
-                erc721_tokens_str = ''
 
             address_encode = {}
             if addr_hash in tokens:
@@ -516,9 +511,7 @@ class BulkDatabaseUpdater:
                                                 'code': '0x',
                                                 'mined': [],
                                                 'inputTokenTransactions': [],
-                                                'outputTokenTransactions': [token_tx],
-                                                'ERC20Balances': [],
-                                                'ERC721Tokens': []}
+                                                'outputTokenTransactions': [token_tx]}
             elif token_tx['from'] is not None:
                 addresses[token_tx['from']]['outputTokenTransactions'].append(token_tx)
             
@@ -528,9 +521,7 @@ class BulkDatabaseUpdater:
                                                 'code': '0x',
                                                 'mined': [],
                                                 'inputTokenTransactions': [token_tx],
-                                                'outputTokenTransactions': [],
-                                                'ERC20Balances': [],
-                                                'ERC721Tokens': []}
+                                                'outputTokenTransactions': []}
             elif token_tx['to'] is not None:
                 addresses[token_tx['to']]['inputTokenTransactions'].append(token_tx)
         
@@ -576,16 +567,9 @@ class BulkDatabaseUpdater:
                 existing_address = coder.decode_address(existing_data)
                 input_token_txs_str = existing_address['inputTokenTransactions']
                 output_token_txs_str = existing_address['outputTokenTransactions']
-                erc20_balances_str = existing_address['ERC20Balances']
-                erc721_tokens_str = existing_address['ERC721Tokens']
             else:
                 input_token_txs_str = ''
                 output_token_txs_str = ''
-                erc20_balances_str = ''
-                erc721_tokens_str = ''
-
-            erc20_balances = coder.decode_erc20_balances(erc20_balances_str)
-            erc721_items = coder.decode_erc721_records(erc721_tokens_str)
 
             for input_token_tx in addr_dict['inputTokenTransactions']:
                 # If suitable token for the transaction wasn't found, it likely means that this 
@@ -596,12 +580,6 @@ class BulkDatabaseUpdater:
                 input_token_txs_str += ('|' + str(input_token_tx['token_address'])
                                         + '+' + str(input_token_tx['from'])
                                         + '+' + str(input_token_tx['value']))
-
-                if tokens[input_token_tx['token_address']]['type'] == 'ERC-20':
-                    erc20_balances[input_token_tx['token_address']] = (
-                        erc20_balances.get(input_token_tx['token_address'], 0) - int(input_token_tx['value']))
-                elif tokens[input_token_tx['token_address']]['type'] == 'ERC-721':
-                    erc721_items[input_token_tx['token_address']].remove(input_token_tx['value'])
                 
             if input_token_txs_str != '' and input_token_txs_str[0] == '|':
                 input_token_txs_str = input_token_txs_str[1:]
@@ -610,23 +588,13 @@ class BulkDatabaseUpdater:
             for output_token_tx in addr_dict['outputTokenTransactions']:
                 if output_token_tx['token_address'] not in tokens:
                     continue
-                if addr_hash == '0x1430064b130e4c5ba9cd032ce36818fc209313f9':
-                    print('out: ' + str(output_token_tx))
                 output_token_txs_str += ('|' + str(output_token_tx['token_address'])
                                         + '+' + str(output_token_tx['to'])
                                         + '+' + str(output_token_tx['value']))
-                if tokens[output_token_tx['token_address']]['type'] == 'ERC-20':
-                    erc20_balances[output_token_tx['token_address']] = (
-                        erc20_balances.get(output_token_tx['token_address'], 0) + int(output_token_tx['value']))
-                elif tokens[output_token_tx['token_address']]['type'] == 'ERC-721':
-                    erc721_items[output_token_tx['token_address']].append(output_token_tx['value'])
     
             if output_token_txs_str != '' and output_token_txs_str[0] == '|':
                 output_token_txs_str = output_token_txs_str[1:]
             addresses_encode[addr_hash]['outputTokenTransactions'] = output_token_txs_str
-
-            addresses_encode[addr_hash]['ERC20Balances'] = coder.encode_erc20_balances(erc20_balances)
-            addresses_encode[addr_hash]['ERC721Tokens'] = coder.encode_erc721_records(erc721_items)
         
         return addresses_encode
     
@@ -665,19 +633,22 @@ class BulkDatabaseUpdater:
                 token_value = coder.encode_token(token_dict)
                 self.db.put(b'token-' + str(addr_hash).encode(), token_value)
     
-    def _save_addresses(self, addresses: Any) -> None:
+    def _save_addresses(self, addresses: Dict, sort: bool) -> None:
         """
-        Saves addresses of a batch to a temporary file.
+        Add new addresses to a file, while removing duplicates.
 
         Args:
-            addresses: Numpy array containing unique addresses.
+            addresses: Addresses gathered in this batch.
+            sort: Whether to sort and filter uniue addresses.
         """
-        if os.path.isfile('data/addresses.npy'):
-            existing_addr = numpy.load('data/addresses.npy')
-            new_addr = numpy.union1d(existing_addr, addresses)
-            numpy.save('data/addresses.npy', new_addr)
-        else:
-            numpy.save('data/addresses.npy', addresses)
+        addr_str = '\n' + '\n'.join(addresses.keys())
+        with open(self.datapath + 'addresses.txt', 'a+') as f:
+            f.write(addr_str)
+
+        if sort:
+            sort_cmd = 'sort -u {} -o {}'.format(self.datapath + 'addresses.txt',
+                                                self.datapath + 'addresses.txt')
+            subprocess.call(sort_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _update_address_balances(self, blockchain_height: int) -> None:
         """
@@ -691,24 +662,23 @@ class BulkDatabaseUpdater:
             blockchain_height: Height at which sync was completed.
         """
         balance_gatherer = BalanceGatherer(self._interface)
-        existing_addr = numpy.load('data/addresses.npy')
-        size = existing_addr.size
         index = 0
         continue_iteration = True
-        while continue_iteration:
-            if index + self._bulk_size > size:
-                sliced_arr = existing_addr[index:]
-                continue_iteration = False
-            else:
-                sliced_arr = existing_addr[index:index + self._bulk_size]
-                index = index + self._bulk_size
-            
-            addresses = sliced_arr.tolist()
-            balances = balance_gatherer._gather_balances(addresses, blockchain_height)
-            self._update_db_balances(balances)
+
+        with open(self.datapath + 'addresses.txt', 'r') as f:
+            while continue_iteration:
+                addresses = []
+                for i in range(self._bulk_size):
+                    line = f.readline()
+                    if line == '':
+                        continue_iteration = False
+                        break
+                    addresses.append(line[:-1])
+                balances = balance_gatherer._gather_balances(addresses, blockchain_height)
+                self._update_db_balances(balances)
         
-        if os.path.exists('data/addresses.npy'):
-            os.remove('data/addresses.npy')
+        if os.path.exists(self.datapath + 'addresses.txt'):
+            os.remove(self.datapath + 'addresses.txt')
 
     def _update_db_balances(self, addr_balances: Dict) -> None:
         """
@@ -733,6 +703,9 @@ def update_database(db_location: str,
                     interface: str,
                     confirmations: int,
                     bulk_size: int,
+                    process_traces: bool,
+                    datapath: str,
+                    gather_tokens: bool,
                     db: Any = None) -> None:
     """
     Updates database with new entries.
@@ -742,5 +715,11 @@ def update_database(db_location: str,
           blockchain: Instance of the blockchain wrapper.
           db: Database instance.
     """
-    db_updater = BulkDatabaseUpdater(db, interface, confirmations, bulk_size)
-    db_updater.fill_database()
+    db_updater = BulkDatabaseUpdater(db, interface, confirmations,
+                                     bulk_size, process_traces, datapath, gather_tokens)
+    # sync occurs multiple times as present will change until sync is completed.
+    while True:
+        fell_behind = db_updater.fill_database()
+        # If during sync the updater didn't fall too far behind, consider sync finished
+        if not fell_behind:
+            break

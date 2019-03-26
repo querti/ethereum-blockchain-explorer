@@ -60,14 +60,27 @@ def add_args(parser: Any) -> None:
                         help='How many seconds to wait until the next database refresh.')
     parser.add_argument('--bulk_size', type=int, default=10000,
                         help='How many blocks should be processed at once.')
+    parser.add_argument('--parse_traces', type=bool, default=False,
+                        help='Whether the internal transactions should be examined as well.' \
+                              'Warning: May take a long time.')
+    parser.add_argument('--datapath', type=str, default='data/',
+                        help='Path, where temporary update data should be saved.' \
+                             'Warning: It will reach several GBs during the initial sync.')
+    parser.add_argument('--gather_tokens', type=bool, default=False,
+                        help='If the blockchain explorer should also gather token data.')
 
-def init_data_dir():
-    """Initializes files holding program state values."""
-    if not os.path.exists('./data') or not os.path.isdir('./data'):
-        os.mkdir('./data')
+def init_data_dir(datapath: str):
+    """
+    Initializes files holding program state values.
+
+    Args:
+        datapath: Path to where the data will be stored.
+    """
+    if not os.path.exists(datapath) or not os.path.isdir(datapath):
+        os.mkdir(datapath)
     
-    if not os.path.exists('./data/progress.txt'):
-        with open('./data/progress.txt', 'w+') as f:
+    if not os.path.exists(datapath + '/progress.txt'):
+        with open(datapath + '/progress.txt', 'w+') as f:
             f.write('0\n0')
 
 
@@ -81,11 +94,16 @@ def main():
     db = plyvel.DB(args.dbpath, create_if_missing=True)
     db.close()
     db_lock = Lock()
-    init_data_dir()
+    datapath = args.datapath
+    if datapath[-1] != '/':
+        datapath = datapath + '/'
+    init_data_dir(datapath)
     blockchain = BlockchainWrapper(args.interface, args.confirmations)
     # Before API interface is started, database is created/updated.
+    print(args.gather_tokens)
     bulk_database_updater.update_database(args.dbpath, db_lock, args.interface,
-                                          args.confirmations, args.bulk_size)
+                                          args.confirmations, args.bulk_size,
+                                          args.parse_traces, datapath, args.gather_tokens)
     sys.exit(0)
     # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
     #                                                               db_lock,
