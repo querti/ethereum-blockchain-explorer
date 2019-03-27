@@ -207,20 +207,29 @@ class DatabaseGatherer:
         Returns:
             List of specified block transactions.
         """
-        block_index = self.block_hash_db.get(block_hash.encode()).decode()
+        block_index = self.block_hash_db.get(block_hash.encode())
         if block_index is None:
+            LOG.info('Block of specified hash not found.')
             return None
 
-        raw_block = self.blocks_db.get(block_index.encode())
+        raw_block = self.blocks_db.get(block_index)
         block = coder.decode_block(raw_block)
         transaction_range = block['transactionIndexRange'].split('-')
         transactions = []  # type: List[Dict[str, Any]]
 
-        it = self.transaction_db.iterator(start=transaction_range[0].encode(),
-                                          stop=transaction_range[0].encode(),
-                                          include_key=False)
-        for raw_tx in it:
-            transactions.append(coder.decode_transaction(raw_tx))
+        if transaction_range == ['']:
+            return transactions
+
+        tx_start = int(transaction_range[0])
+        tx_end = int(transaction_range[1])
+
+        for i in range(tx_start, tx_end + 1):
+            raw_tx = self.transaction_db.get(str(i).encode())
+            if raw_tx is None:
+                LOG.info('Record of block\'s transaction not found. Possible DB corruption.')
+                return None
+            transaction = coder.decode_transaction(raw_tx)
+            transactions.append(transaction)
 
         return transactions
 
@@ -235,18 +244,27 @@ class DatabaseGatherer:
         Returns:
             List of specified block transactions.
         """
-        raw_block = self.blocks_db.get(block_index.encode())
+        raw_block = self.blocks_db.get(block_index)
         if raw_block is None:
+            LOG.info('Block of specified index not found')
             return None
         block = coder.decode_block(raw_block)
         transaction_range = block['transactionIndexRange'].split('-')
         transactions = []  # type: List[Dict[str, Any]]
 
-        it = self.transaction_db.iterator(start=transaction_range[0].encode(),
-                                          stop=transaction_range[0].encode(),
-                                          include_key=False)
-        for raw_tx in it:
-            transactions.append(coder.decode_transaction(raw_tx))
+        if transaction_range == ['']:
+            return transactions
+
+        tx_start = int(transaction_range[0])
+        tx_end = int(transaction_range[1])
+
+        for i in range(tx_start, tx_end + 1):
+            raw_tx = self.transaction_db.get(str(i).encode())
+            if raw_tx is None:
+                LOG.info('Record of block\'s transaction not found. Possible DB corruption.')
+                return None
+            transaction = coder.decode_transaction(raw_tx)
+            transactions.append(transaction)
 
         return transactions
 

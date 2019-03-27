@@ -80,3 +80,18 @@ def read_addresses(addresses: List[str],
         return 'None of the requested addresses found', 404
 
     return full_addresses
+
+@setup_database
+def get_token(address: str, db=None) -> None:
+    """
+    Get information about a token specified by its address.
+
+    Args:
+        address: Specified token address.
+    """
+    gatherer = DatabaseGatherer(db)
+    token = gatherer.get_token(address)
+    if token is None:
+        return 'Token contract with address {} not found'.format(address), 404
+
+    return token

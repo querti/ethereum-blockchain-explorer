@@ -298,8 +298,8 @@ paths:
       operationId: src.endpoints.addresses.get_balance
       tags:
         - addresses
-      summary: Get information about a transaction specified by its hash.
-      description: Get information about a transaction specified by its hash.
+      summary: Get current balance of an address.
+      description: Get current balance of an address.
       parameters:
         - name: addr
           in: path
@@ -359,6 +359,24 @@ paths:
             description: Array of retrieved addresses.
             items:
               $ref: '#/definitions/Address'
+  /token/{addr}:
+    get:
+      operationId: src.endpoints.addresses.get_token
+      tags:
+        - addresses
+      summary: Get information about an ERC-20 or ERC-721 token.
+      description: Get information about an ERC-20 or ERC-721 token.
+      parameters:
+        - name: addr
+          in: path
+          description: Ethereum blockchain address of the token.
+          type: string
+          required: True
+      responses:
+        200:
+          description: Successfully retrieved the token data.
+          schema:
+            type: string
 
 definitions:
   Block:
@@ -487,12 +505,6 @@ definitions:
       balance:
         type: string
         description: The current balance of the address.
-      inputTransactionCount:
-        type: string
-        description: How many transactions is this address the input of.
-      outputTransactionCount:
-        type: string
-        description: How many transactions is this address the output of.
       inputTransactions:
         type: string
         description: List of transactions this address is the input of.
@@ -504,3 +516,30 @@ definitions:
         description: List of block hshes mined by this address
         items:
           type: string
+      tokenContract:
+        type: string
+        description: Whether the address is a ERC-20 or ERC-721 contract.
+      inputTokenTransactions:
+        type: string
+        description: List of token transaction in which this address was an input.
+      outputTokenTransactions:
+        type: string
+        description: List of token transactions in which this address was an output.
+  Token:
+    type: object
+    properties:
+      symbol:
+        type: string
+        description: Symbol of the ERC token.
+      name:
+        type: string
+        description: Name of the ERC token.
+      decimals:
+        type: string
+        description: Number of decimal places this token can be devided into.
+      total_supply:
+        type: string
+        description: Total supply of the Token.
+      type:
+        type: string
+        description: Whether the token is ERC-20 or ERC-721.
