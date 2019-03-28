@@ -376,7 +376,7 @@ paths:
         200:
           description: Successfully retrieved the token data.
           schema:
-            type: string
+            $ref: '#/definitions/Token'
 
 definitions:
   Block:
@@ -422,6 +422,7 @@ definitions:
         type: string
         description: Unix timestamp of when the block was generated.
       transactions:
+        description: Transactions included in the block.
         type: array
         items:
           $ref: '#/definitions/Transaction'
@@ -506,14 +507,18 @@ definitions:
         type: string
         description: The current balance of the address.
       inputTransactions:
-        type: string
+        type: array
+        items:
+          $ref: '#/definitions/Transaction'
         description: List of transactions this address is the input of.
       outputTransactions:
-        type: string
+        type: array
+        items:
+          $ref: '#/definitions/Transaction'
         description: List of transactions this address is the output of.
       mined:
         type: array
-        description: List of block hshes mined by this address
+        description: List of block hashes mined by this address
         items:
           type: string
       tokenContract:
@@ -543,3 +548,15 @@ definitions:
       type:
         type: string
         description: Whether the token is ERC-20 or ERC-721.
+  TokenTransaction:
+    type: object
+    properties:
+      token_address:
+        type: string
+        description: Address of the token contract.
+      address:
+        type: string
+        description: Address of sender/receiver of this token transaction.
+      value:
+        type: string
+        description: Amount of transferred currency.

@@ -100,11 +100,10 @@ def main():
     init_data_dir(datapath)
     blockchain = BlockchainWrapper(args.interface, args.confirmations)
     # Before API interface is started, database is created/updated.
-    print(args.gather_tokens)
     bulk_database_updater.update_database(args.dbpath, db_lock, args.interface,
                                           args.confirmations, args.bulk_size,
                                           args.parse_traces, datapath, args.gather_tokens)
-    sys.exit(0)
+    # sys.exit(0)
     # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
     #                                                               db_lock,
     #                                                               blockchain,

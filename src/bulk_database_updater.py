@@ -717,9 +717,11 @@ def update_database(db_location: str,
     """
     db_updater = BulkDatabaseUpdater(db, interface, confirmations,
                                      bulk_size, process_traces, datapath, gather_tokens)
-    # sync occurs multiple times as present will change until sync is completed.
+    # sync occurs multiple times as present will change before sync is completed.
     while True:
         fell_behind = db_updater.fill_database()
+        # TODO: for testing purposes
+        fell_behind = False
         # If during sync the updater didn't fall too far behind, consider sync finished
         if not fell_behind:
             break

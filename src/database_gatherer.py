@@ -3,7 +3,7 @@
 from typing import Any, List, Dict, Union
 import logging
 
-import src.coders.coder as coder
+import src.coders.bulkcoder as coder
 
 LOG = logging.getLogger()
 
@@ -25,6 +25,7 @@ class DatabaseGatherer:
         self.transaction_db = db.prefixed_db(b'transaction-')
         self.tx_hash_db = db.prefixed_db(b'tx-hash-')
         self.address_db = db.prefixed_db(b'address-')
+        self.token_db = db.prefixed_db(b'token-')
 
     def get_block_by_hash(self, block_hash: str) -> Union[Dict[str, str], None]:
         """
@@ -43,6 +44,7 @@ class DatabaseGatherer:
 
         raw_block = self.blocks_db.get(block_index)
         block = coder.decode_block(raw_block)
+        block['number'] = block_index.decode()
         transaction_range = block['transactionIndexRange'].split('-')
         del block['transactionIndexRange']
         transactions = []  # type: List[Dict[str, Any]]
@@ -113,6 +115,7 @@ class DatabaseGatherer:
         for i in range(block_indexes[0], block_indexes[-1] + 1):
             raw_block = self.blocks_db.get(str(i).encode())
             block = coder.decode_block(raw_block)
+            block['number'] = str(i)
             transaction_range = block['transactionIndexRange'].split('-')
             del block['transactionIndexRange']
             transactions = []  # type: List[Dict[str, Any]]
@@ -153,6 +156,7 @@ class DatabaseGatherer:
         for i in range(int(index_start), int(index_end) + 1):
             raw_block = self.blocks_db.get(str(i).encode())
             block = coder.decode_block(raw_block)
+            block['number'] = str(i)
             transaction_range = block['transactionIndexRange'].split('-')
             del block['transactionIndexRange']
             transactions = []  # type: List[Dict[str, Any]]
@@ -186,12 +190,12 @@ class DatabaseGatherer:
         Returns:
             The desired transaction.
         """
-        tx_index = self.tx_hash_db.get(tx_hash.encode()).decode()
+        tx_index = self.tx_hash_db.get(tx_hash.encode())
         if tx_index is None:
             LOG.info('Transaction of given hash not found.')
             return None
 
-        raw_tx = self.transaction_db(tx_index.encode())
+        raw_tx = self.transaction_db.get(tx_index)
         transaction = coder.decode_transaction(raw_tx)
 
         return transaction
@@ -216,6 +220,7 @@ class DatabaseGatherer:
         block = coder.decode_block(raw_block)
         transaction_range = block['transactionIndexRange'].split('-')
         transactions = []  # type: List[Dict[str, Any]]
+        print(transaction_range)
 
         if transaction_range == ['']:
             return transactions
@@ -244,7 +249,7 @@ class DatabaseGatherer:
         Returns:
             List of specified block transactions.
         """
-        raw_block = self.blocks_db.get(block_index)
+        raw_block = self.blocks_db.get(block_index.encode())
         if raw_block is None:
             LOG.info('Block of specified index not found')
             return None
@@ -268,9 +273,9 @@ class DatabaseGatherer:
 
         return transactions
 
-    def get_transactions_of_address(self, addr: str, time_from: str, time_to: str,
-                                    val_from: str,
-                                    val_to: str) -> Union[List[Dict[str, Any]], None]:
+    def get_transactions_of_address(self, addr: str, time_from: int, time_to: int,
+                                    val_from: int,
+                                    val_to: int) -> Union[List[Dict[str, Any]], None]:
         """
         Get transactions of specified address, with filtering by time and transferred capital.
 
@@ -293,24 +298,27 @@ class DatabaseGatherer:
         output_transactions = []
 
         for transaction in address['inputTransactionIndexes'].split('|'):
+            if transaction == '':
+                break
             tx_index, timestamp, value = transaction.split('+')
-            if (int(time_from) <= int(timestamp) and int(time_to) >= int(timestamp)
-                    and int(val_from) <= int(value) and int(val_to) >= int(value)):
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)
+                    and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.transaction_db.get(tx_index.encode())
                 input_transactions.append(coder.decode_transaction(raw_tx))
 
         for transaction in address['outputTransactionIndexes'].split('|'):
+            if transaction == '':
+                break
             tx_index, timestamp, value = transaction.split('+')
-            if (int(time_from) <= int(timestamp) and int(time_to) >= int(timestamp)
-                    and int(val_from) <= int(value) and int(val_to) >= int(value)):
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)
+                    and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.transaction_db.get(tx_index.encode())
                 output_transactions.append(coder.decode_transaction(raw_tx))
-
         return input_transactions + output_transactions
 
-    def get_address(self, addr: str, time_from: str, time_to: str,
-                    val_from: str, val_to: str,
-                    no_tx_list: str) -> Union[List[Dict[str, Any]], None]:
+    def get_address(self, addr: str, time_from: int, time_to: int,
+                    val_from: int, val_to: int,
+                    no_tx_list: int) -> Union[List[Dict[str, Any]], None]:
         """
         Get information of an address, with the possibility of filtering/limiting transactions.
 
@@ -325,39 +333,72 @@ class DatabaseGatherer:
         Returns:
             Address information along with its transactions.
         """
-        # TODO: tie pocty transakcii adresy by som asi nevracal...
         raw_address = self.address_db.get(addr.encode())
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
+
         input_transactions = []
         output_transactions = []
-        counter = 0
 
         for transaction in address['inputTransactionIndexes'].split('|'):
+            if transaction == '':
+                break
             tx_index, timestamp, value = transaction.split('+')
-            if (int(time_from) <= int(timestamp) and int(time_to) >= int(timestamp)
-                    and int(val_from) <= int(value) and int(val_to) >= int(value)):
-                counter += 1
-                if counter > int(no_tx_list):
-                    break
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)
+                    and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.transaction_db.get(tx_index.encode())
                 input_transactions.append(coder.decode_transaction(raw_tx))
 
         for transaction in address['outputTransactionIndexes'].split('|'):
+            if transaction == '':
+                break
             tx_index, timestamp, value = transaction.split('+')
-            if (int(time_from) <= int(timestamp) and int(time_to) >= int(timestamp)
-                    and int(val_from) <= int(value) and int(val_to) >= int(value)):
-                counter += 1
-                if counter > int(no_tx_list):
-                    break
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)
+                    and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.transaction_db.get(tx_index.encode())
                 output_transactions.append(coder.decode_transaction(raw_tx))
+        
+        address['mined'] = address['mined'].split('|')
+        if address['mined'] == ['']:
+            address['mined'] = []
 
         del address['inputTransactionIndexes']
         del address['outputTransactionIndexes']
-        address['inputTransactions'] = input_transactions
-        address['outputTransactions'] = output_transactions
+        
+        all_transactions = input_transactions + output_transactions
+        all_transactions = sorted(all_transactions, key=lambda k: int(k['timestamp'])) 
+
+        address['inputTransactions'] = []
+        address['outputTransactions'] = []
+        iteration = no_tx_list if no_tx_list < len(all_transactions) else len(all_transactions)
+
+        for i in range(iteration):
+            if all_transactions[i] in input_transactions:
+                address['inputTransactions'].append(all_transactions[i])
+            if all_transactions[i] in output_transactions:
+                address['outputTransactions'].append(all_transactions[i])
+        
+        input_token_txs = address['inputTokenTransactions'].split('|')
+        address['inputTokenTransactions'] = []
+        for input_token_tx in input_token_txs:
+            if input_token_tx == '':
+                break
+            contract_addr, addr_from, value = input_token_tx.split('+')
+            address['inputTokenTransactions'].append({'contract_address': contract_addr,
+                                                      'address_from': addr_from,
+                                                      'value': value})
+
+        output_token_txs = address['outputTokenTransactions'].split('|')
+        address['outputTokenTransactions'] = []
+        for output_token_tx in output_token_txs:
+            if output_token_tx == '':
+                break
+            contract_addr, addr_to, value = output_token_tx.split('+')
+            address['outputTokenTransactions'].append({'contract_address': contract_addr,
+                                                       'address_to': addr_to,
+                                                       'value': value})    
+
         return address
 
     def get_balance(self, addr: str) -> Union[str, None]:
@@ -376,3 +417,20 @@ class DatabaseGatherer:
         address = coder.decode_address(raw_address)
 
         return address['balance']
+
+    def get_token(self, addr:str) -> Union[Dict[str, Any], None]:
+        """
+        Get informtion about a token based on its contract address.
+
+        Args:
+            addr: Token address.
+        
+        Returns:
+            Information about a token.
+        """
+        raw_token = self.token_db.get(addr.encode())
+        if raw_token is None:
+            return None
+        token = coder.decode_token(raw_token)
+
+        return token
