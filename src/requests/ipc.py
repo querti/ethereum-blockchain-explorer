@@ -1,3 +1,4 @@
+"""File taken from Ethereum-etl."""
 # The MIT License (MIT)
 #
 # Copyright (c) 2016 Piper Merriam
@@ -33,16 +34,19 @@ from web3.utils.threads import (
 try:
     from json import JSONDecodeError
 except ImportError:
-    JSONDecodeError = ValueError
+    JSONDecodeError = ValueError  # type: ignore
 
 
 # Mostly copied from web3.py/providers/ipc.py. Supports batch requests.
-# Will be removed once batch feature is added to web3.py https://github.com/ethereum/web3.py/issues/832
+# Will be removed once batch feature is added to web3.py
 # Also see this optimization https://github.com/ethereum/web3.py/pull/849
 class BatchIPCProvider:
+    """Class for making asynchronous ipc requests."""
+
     _socket = None
 
     def __init__(self, ipc_path=None, testnet=False, timeout=10):
+        """Initialization."""
         if ipc_path is None:
             self.ipc_path = get_default_ipc_path(testnet)
         else:
@@ -53,6 +57,7 @@ class BatchIPCProvider:
         self._socket = PersistantSocket(self.ipc_path)
 
     def make_request(self, text):
+        """Make IPC request."""
         request = text.encode('utf-8')
         with self._lock, self._socket as sock:
             try:
@@ -87,6 +92,7 @@ class BatchIPCProvider:
 
 # A valid JSON RPC response can only end in } or ] http://www.jsonrpc.org/specification
 def has_valid_json_rpc_ending(raw_response):
+    """Finds if responses has valid JSON."""
     for valid_ending in [b"}\n", b"]\n"]:
         if raw_response.endswith(valid_ending):
             return True

@@ -1,3 +1,4 @@
+"""File taken from Ethereum-etl."""
 # MIT License
 #
 # Copyright (c) 2018 Evgeny Medvedev, evge.medvedev@gmail.com
@@ -32,6 +33,7 @@ DEFAULT_TIMEOUT = 60
 
 
 def get_provider_from_uri(uri_string, timeout=DEFAULT_TIMEOUT, batch=False):
+    """Get IPC or RPC provider based on URI."""
     uri = urlparse(uri_string)
     if uri.scheme == 'file':
         if batch:
@@ -46,4 +48,3 @@ def get_provider_from_uri(uri_string, timeout=DEFAULT_TIMEOUT, batch=False):
             return HTTPProvider(uri_string, request_kwargs=request_kwargs)
     else:
         raise ValueError('Unknown uri scheme {}'.format(uri_string))
-

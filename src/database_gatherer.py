@@ -3,7 +3,7 @@
 from typing import Any, List, Dict, Union
 import logging
 
-import src.coders.bulkcoder as coder
+import src.coder as coder
 
 LOG = logging.getLogger()
 
@@ -96,7 +96,7 @@ class DatabaseGatherer:
         Returns:
             List of block dictionaries.
         """
-        block_indexes = []  # type: List[str]
+        block_indexes = []  # type: List[int]
         blocks = []  # type: List[Dict[str, Any]]
         counter = 0
         it = self.block_timestamp_db.iterator(start=str(block_start).encode(),
@@ -124,7 +124,7 @@ class DatabaseGatherer:
                 block['transactions'] = transactions
                 blocks.append(block)
                 continue
-            
+
             tx_start = int(transaction_range[0])
             tx_end = int(transaction_range[1])
             for j in range(tx_start, tx_end + 1):
@@ -165,7 +165,7 @@ class DatabaseGatherer:
                 block['transactions'] = transactions
                 blocks.append(block)
                 continue
-            
+
             tx_start = int(transaction_range[0])
             tx_end = int(transaction_range[1])
             for j in range(tx_start, tx_end + 1):
@@ -358,16 +358,16 @@ class DatabaseGatherer:
                     and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.transaction_db.get(tx_index.encode())
                 output_transactions.append(coder.decode_transaction(raw_tx))
-        
+
         address['mined'] = address['mined'].split('|')
         if address['mined'] == ['']:
             address['mined'] = []
 
         del address['inputTransactionIndexes']
         del address['outputTransactionIndexes']
-        
+
         all_transactions = input_transactions + output_transactions
-        all_transactions = sorted(all_transactions, key=lambda k: int(k['timestamp'])) 
+        all_transactions = sorted(all_transactions, key=lambda k: int(k['timestamp']))
 
         address['inputTransactions'] = []
         address['outputTransactions'] = []
@@ -378,7 +378,7 @@ class DatabaseGatherer:
                 address['inputTransactions'].append(all_transactions[i])
             if all_transactions[i] in output_transactions:
                 address['outputTransactions'].append(all_transactions[i])
-        
+
         input_token_txs = address['inputTokenTransactions'].split('|')
         address['inputTokenTransactions'] = []
         for input_token_tx in input_token_txs:
@@ -397,7 +397,7 @@ class DatabaseGatherer:
             contract_addr, addr_to, value = output_token_tx.split('+')
             address['outputTokenTransactions'].append({'contract_address': contract_addr,
                                                        'address_to': addr_to,
-                                                       'value': value})    
+                                                       'value': value})
 
         return address
 
@@ -418,13 +418,13 @@ class DatabaseGatherer:
 
         return address['balance']
 
-    def get_token(self, addr:str) -> Union[Dict[str, Any], None]:
+    def get_token(self, addr: str) -> Union[Dict[str, Any], None]:
         """
         Get informtion about a token based on its contract address.
 
         Args:
             addr: Token address.
-        
+
         Returns:
             Information about a token.
         """

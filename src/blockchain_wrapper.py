@@ -30,7 +30,7 @@ class BlockchainWrapper:
             self._web3 = Web3(Web3.WebsocketProvider(self._interface))
         else:
             self._web3 = Web3()
-    
+
     def get_height(self) -> int:
         """
         Get current height of the blockchain.
@@ -39,14 +39,14 @@ class BlockchainWrapper:
             Current blockchain height.
         """
         return self._web3.eth.blockNumber
-    
+
     def get_code(self, address: str) -> str:
         """
         Get code of contract address.
 
         Args:
             address: Address whose code is gathered.
-        
+
         Returns:
             Address code.
         """
@@ -97,7 +97,6 @@ class BlockchainWrapper:
         addresses = {}  # type: Dict[str, Any]
 
         for imm_transaction in transactions:
-            # imm_transaction = self._web3.eth.getTransaction(transaction_hash)
             transaction = dict(imm_transaction)
             receipt = self._web3.eth.getTransactionReceipt(transaction['hash'])
             if receipt is None:
@@ -107,33 +106,33 @@ class BlockchainWrapper:
             transaction['cumulativeGasUsed'] = receipt['cumulativeGasUsed']
             transaction['gasUsed'] = receipt['gasUsed']
             transaction['logs'] = receipt['logs']
-            # transaction['transactionHash'] = receipt['transactionHash']
-            # transaction['transactionIndex'] = receipt['transactionIndex']
-            # transaction['transactionBlockIndex'] = self._block_index
             transaction['timestamp'] = timestamp
-            # transaction['status'] = receipt['status']
             full_transactions.append(transaction)
 
             if transaction['from'] not in addresses and transaction['from'] is not None:
-                addresses[transaction['from']] = {'inputTransactionHashes': [transaction['hash'].hex()],
+                addresses[transaction['from']] = {'inputTransactionHashes':
+                                                  [transaction['hash'].hex()],
                                                   'outputTransactionHashes': [],
                                                   'code': '0x'}
             elif transaction['from'] is not None:
-                addresses[transaction['from']]['inputTransactionHashes'].append(transaction['hash'].hex())
+                addresses[transaction['from']]['inputTransactionHashes'].append(
+                    transaction['hash'].hex())
 
             if transaction['to'] not in addresses and transaction['to'] is not None:
                 addresses[transaction['to']] = {'inputTransactionHashes': [],
-                                                'outputTransactionHashes': [transaction['hash'].hex()],
+                                                'outputTransactionHashes':
+                                                [transaction['hash'].hex()],
                                                 'code': '0x'}
             elif transaction['to'] is not None:
-                addresses[transaction['to']]['outputTransactionHashes'].append(transaction['hash'].hex())
+                addresses[transaction['to']]['outputTransactionHashes'].append(
+                    transaction['hash'].hex())
 
             if (transaction['contractAddress'] not in addresses
-                and transaction['contractAddress'] is not None):
+                    and transaction['contractAddress'] is not None):
                 code = self._web3.eth.getCode(transaction['contractAddress'])
                 addresses[transaction['contractAddress']] = {'inputTransactionHashes': [],
-                                                'outputTransactionHashes': [],
-                                                'code': code}
+                                                             'outputTransactionHashes': [],
+                                                             'code': code}
 
         addresses = self.gather_address_balances(addresses)
         return (full_transactions, addresses)

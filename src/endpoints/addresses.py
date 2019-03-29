@@ -30,26 +30,26 @@ def read_address(addr: str,
     """
     try:
         int_time_from = int(time_from)
-    except ValueError as e:
+    except ValueError:
         return 'Start time {} couldn\'t be parsed.'.format(time_from), 400
 
     if time_to == '':
         time_to = str(int(time.time()) + 1000000)
     try:
         int_time_to = int(time_to)
-    except ValueError as e:
+    except ValueError:
         return 'End time {} couldn\'t be parsed.'.format(time_to), 400
 
     try:
         int_val_from = int(val_from)
-    except ValueError as e:
+    except ValueError:
         return 'Minimum value {} couldn\'t be parsed.'.format(val_from), 400
-    
+
     if val_to == '':
         val_to = str(1000000000000000000000000000000)
     try:
         int_val_to = int(val_to)
-    except ValueError as e:
+    except ValueError:
         return 'Maximum value {} couldn\'t be parsed.'.format(val_to), 400
 
     if int_time_from > int_time_to:
@@ -61,7 +61,7 @@ def read_address(addr: str,
         no_tx_list = str(1000000000000000000000000000000)
     try:
         int_no_tx_list = int(no_tx_list)
-    except ValueError as e:
+    except ValueError:
         return 'Maximum number of transactions {} couldn\'t be parsed.'.format(no_tx_list), 400
 
     gatherer = DatabaseGatherer(db)
@@ -110,26 +110,26 @@ def read_addresses(addrs: List[str],
     """
     try:
         int_time_from = int(time_from)
-    except ValueError as e:
+    except ValueError:
         return 'Start time {} couldn\'t be parsed.'.format(time_from), 400
 
     if time_to == '':
         time_to = str(int(time.time()) + 1000000)
     try:
         int_time_to = int(time_to)
-    except ValueError as e:
+    except ValueError:
         return 'End time {} couldn\'t be parsed.'.format(time_to), 400
 
     try:
         int_val_from = int(val_from)
-    except ValueError as e:
+    except ValueError:
         return 'Minimum value {} couldn\'t be parsed.'.format(val_from), 400
-    
+
     if val_to == '':
         val_to = str(1000000000000000000000000000000)
     try:
         int_val_to = int(val_to)
-    except ValueError as e:
+    except ValueError:
         return 'Maximum value {} couldn\'t be parsed.'.format(val_to), 400
 
     if int_time_from > int_time_to:
@@ -141,7 +141,7 @@ def read_addresses(addrs: List[str],
         no_tx_list = str(1000000000000000000000000000000)
     try:
         int_no_tx_list = int(no_tx_list)
-    except ValueError as e:
+    except ValueError:
         return 'Maximum number of transactions {} couldn\'t be parsed.'.format(no_tx_list), 400
     gatherer = DatabaseGatherer(db)
     full_addresses = []
@@ -152,6 +152,7 @@ def read_addresses(addrs: List[str],
         return 'None of the requested addresses found', 404
 
     return full_addresses
+
 
 @setup_database
 def get_token(addr: str, db=None) -> None:

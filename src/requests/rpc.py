@@ -1,3 +1,4 @@
+"""File taken from Ethereum-etl."""
 # The MIT License (MIT)
 #
 # Copyright (c) 2016 Piper Merriam
@@ -26,10 +27,12 @@ from web3.utils.request import make_post_request
 
 
 # Mostly copied from web3.py/providers/rpc.py. Supports batch requests.
-# Will be removed once batch feature is added to web3.py https://github.com/ethereum/web3.py/issues/832
+# Will be removed once batch feature is added to web3.py
 class BatchHTTPProvider(HTTPProvider):
+    """Class for making asynchronous rpc requests."""
 
     def make_request(self, text):
+        """Make API request."""
         self.logger.debug("Making request HTTP. URI: %s, Request: %s",
                           self.endpoint_uri, text)
         request_data = text.encode('utf-8')

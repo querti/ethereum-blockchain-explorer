@@ -1,3 +1,4 @@
+"""File taken from Ethereum-etl."""
 # MIT License
 #
 # Copyright (c) 2018 Evgeny Medvedev, evge.medvedev@gmail.com
@@ -25,11 +26,15 @@ import threading
 
 
 class ThreadLocalProxy:
+    """File taken from Ethereum-etl."""
+
     def __init__(self, delegate_factory):
+        """Initialization."""
         self._thread_local = threading.local()
         self._delegate_factory = delegate_factory
 
     def __getattr__(self, name):
+        """Get attribute."""
         return getattr(self._get_thread_local_delegate(), name)
 
     def _get_thread_local_delegate(self):

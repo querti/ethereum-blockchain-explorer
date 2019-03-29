@@ -1,5 +1,6 @@
-"""Separate coder for bulk updating, as the data have a different format."""
+"""Coder for preparing data for DB writes and parsing data from DB reads."""
 from typing import Dict, List
+
 
 def encode_transaction(transaction: Dict) -> bytes:
     """
@@ -13,7 +14,7 @@ def encode_transaction(transaction: Dict) -> bytes:
     """
     tx_str = ''
     tx_str += transaction['blockHash'] + '\0'
-    tx_str += transaction['blockNumber']+ '\0'
+    tx_str += transaction['blockNumber'] + '\0'
     if transaction['from'] is None:
         tx_str += '/0'
     else:
@@ -65,9 +66,6 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     transaction['cumulativeGasUsed'] = tx_items[11]
     transaction['gasUsed'] = tx_items[12]
     transaction['logs'] = tx_items[13]
-    # transaction['logsBloom'] = tx_items[13]
-    # transaction['status'] = tx_items[14]
-    #transaction['contract'] = tx_items[14]
     transaction['contract_address'] = tx_items[14]
     transaction['timestamp'] = tx_items[15]
 
@@ -153,11 +151,10 @@ def encode_address(address: Dict) -> bytes:
     address_str += address['code'] + '\0'
     address_str += address['inputTransactionIndexes'] + '\0'
     address_str += address['outputTransactionIndexes'] + '\0'
-    address_str += address['mined'] +'\0'
-    address_str += address['tokenContract'] +'\0'
-    address_str += address['inputTokenTransactions'] +'\0'
-    address_str += address['outputTokenTransactions'] +'\0'
-        
+    address_str += address['mined'] + '\0'
+    address_str += address['tokenContract'] + '\0'
+    address_str += address['inputTokenTransactions'] + '\0'
+    address_str += address['outputTokenTransactions'] + '\0'
 
     return address_str.encode()
 
@@ -186,6 +183,7 @@ def decode_address(raw_address: bytes) -> Dict:
 
     return address
 
+
 def encode_token(token: Dict) -> bytes:
     """
     Creates bytes representation of token data.
@@ -201,7 +199,7 @@ def encode_token(token: Dict) -> bytes:
     token_str += token['name'] + '\0'
     token_str += token['decimals'] + '\0'
     token_str += token['total_supply'] + '\0'
-    token_str += token['type'] +'\0'
+    token_str += token['type'] + '\0'
 
     return token_str.encode()
 
@@ -227,13 +225,14 @@ def decode_token(raw_token: bytes) -> Dict:
 
     return token
 
+
 def encode_erc20_balances(erc20_balances: Dict) -> str:
     """
     Encodes dictionary containing ERC-20 balances into a string.
 
     Args:
         erc20_balances: Dictionary of balances.
-    
+
     Returns:
         String representing address balances.
     """
@@ -244,13 +243,14 @@ def encode_erc20_balances(erc20_balances: Dict) -> str:
         erc20_balances_str += '|' + addr + '+' + str(balance)
     return erc20_balances_str[1:]
 
+
 def decode_erc20_balances(erc20_balances_str: str) -> Dict:
     """
     Decodes string of ERC-20 balances of an address into a dictionary.
 
     Args:
         erc20_balances_str: String representing current erc-20 balances.
-    
+
     Returns:
         Dictionary containing all balances.
     """
@@ -258,10 +258,11 @@ def decode_erc20_balances(erc20_balances_str: str) -> Dict:
     if erc20_balances_str == '':
         return {}
     for token in erc20_balances_str.split('|'):
-            token_address, balance = token.split('+')
-            balances['token_address'] = int(balance)
+        token_address, balance = token.split('+')
+        balances['token_address'] = int(balance)
 
     return balances
+
 
 def encode_erc721_records(erc721_records: Dict[str, List]) -> str:
     """
@@ -269,7 +270,7 @@ def encode_erc721_records(erc721_records: Dict[str, List]) -> str:
 
     Args:
         erc721_records: Dictionary of owned items.
-    
+
     Returns:
         String representing address's owned items.
     """
@@ -277,11 +278,12 @@ def encode_erc721_records(erc721_records: Dict[str, List]) -> str:
     if not erc721_records:
         return ''
     for addr, items in erc721_records.items():
-        erc20_balances_str += '|' + addr
+        erc721_records_str += '|' + addr
         for item in items:
-            erc20_balances_str += '+' + item
-    
+            erc721_records_str += '+' + item
+
     return erc721_records_str[1:]
+
 
 def decode_erc721_records(erc721_records_str: str) -> Dict[str, List]:
     """
@@ -289,7 +291,7 @@ def decode_erc721_records(erc721_records_str: str) -> Dict[str, List]:
 
     Args:
         erc721_records_str: String representing current erc-721 items.
-    
+
     Returns:
         Dictionary containing all address's items.
     """
@@ -297,7 +299,7 @@ def decode_erc721_records(erc721_records_str: str) -> Dict[str, List]:
     if erc721_records_str == '':
         return {}
     for token in erc721_records_str.split('|'):
-            records = token.split('+')
-            items[records[0]] = records[1:]
+        records = token.split('+')
+        items[records[0]] = records[1:]
 
     return items

@@ -1,174 +1,718 @@
-"""Updates the database with new entries."""
+"""Class that updates the database."""
 # from multiprocessing import Lock
 from typing import Any, Tuple, List, Dict
 import logging
-from datetime import datetime
+import subprocess
+import csv
+import os
+
+import pandas
 
 from src.common import setup_database
-import src.coders.coder as coder
+import src.coder as coder
+from src.blockchain_wrapper import BlockchainWrapper
+from src.requests.balances import BalanceGatherer
+from src.requests.traces import TraceAddressGatherer
 
 LOG = logging.getLogger()
 
-# TODO ADD MINER SUPPORT
-class DatabaseUpdater:
-    """Class that updates the database to the newest block."""
+csv.field_size_limit(100000000)
 
-    def __init__(self, db: Any, blockchain: Any) -> None:
+
+class DatabaseUpdater:
+    """Class that updates the database."""
+
+    def __init__(self, db: Any,
+                 interface: str,
+                 confirmations: int,
+                 bulk_size: int,
+                 process_traces: bool = False,
+                 datapath: str = 'data/',
+                 gather_tokens_arg: bool = True) -> None:
         """
         Initialization.
 
+        WARNING: Examining traces will reveal more addresses, however the sync
+                 will be significantly slower.
+
         Args:
-                db: Database instance.
-                blockchain: Instance of the blockchain wrapper.
+            db: Database instance.
+            interface: Path to the Geth blockchain node.
+            confirmations: How many confirmations a block has to have.
+            bulk_size: How many blocks to be included in bulk DB update.
+            process_traces: Whether to get addresses from traces.
+            datapath: Path for temporary file created in DB creation.
+            gather_tokens: Whether to also gather token information
         """
+        self._blockchain = BlockchainWrapper(interface, confirmations)
         self.db = db
-        self.blockchain = blockchain
-        self.blocks_db = db.prefixed_db(b'block-')
-        self.block_hash_db = db.prefixed_db(b'hash-block-')
-        self.block_timestamp_db = db.prefixed_db(b'timestamp-block-')
-        self.transaction_db = db.prefixed_db(b'transaction-')
-        self.tx_hash_db = db.prefixed_db(b'tx-hash-')
+        self._confirmations = confirmations
+        self._bulk_size = bulk_size
+        self.process_traces = process_traces
+        self.datapath = datapath
+        self.gather_tokens_arg = gather_tokens_arg
         self.address_db = db.prefixed_db(b'address-')
-        # Get highest block index in DB
-        it = self.blocks_db.iterator(include_value=False, reverse=True)
-        # Blocks are not actually numerically ordered, but as number strings
-        # Theoretically however, highest number should still be near the top
-        test_nums = 10000
-        counter = 0
-        self._highest_block = 5000000
-        # for block_index in it:
-        #     if self._highest_block < int(block_index.decode()):
-        #         self._highest_block = int(block_index.decode())
-        #     counter += 1
-        #     if counter >= test_nums:
-        #         break
-        # it.close()
-        # Get highest transaction index in DB
-        counter = 0
-        it = self.transaction_db.iterator(include_value=False, reverse=True)
-        self._highest_tx = 0
-        # for tx_index in it:
-        #     if self._highest_tx < int(tx_index.decode()):
-        #         self._highest_tx = int(tx_index.decode())
-        #     counter += 1
-        #     if counter >= test_nums:
-        #         break
-        # it.close()
+        self.token_db = db.prefixed_db(b'token-')
+        with open(self.datapath + 'progress.txt', 'r') as f:
+            data = f.read().split('\n')
+            self._highest_block = int(data[0])
+            self._highest_tx = int(data[1])
 
-    def fill_database(self) -> None:
-        """Adds new entries to the database (or creates a new one from scratch)."""
-        # How often to notify the user about the progress.
-        notify_rate = 500
-        print('start: {}'.format(datetime.now()))
+        if interface[-4:] == '.ipc':
+            self._interface = 'file://' + interface
+        else:
+            self._interface = interface
+
+    def fill_database(self) -> bool:
+        """Adds new entries to the database."""
+        stop_iteration = False
+        batch_index = 0
         while True:
-            print('next {}'.format(self._highest_block))
-            result = self.blockchain.gather_block(self._highest_block)
-            if result is None:
-                LOG.info('Database has been updated.')
-                return
-            imm_block, transactions, addresses = result
-            block = dict(imm_block)
-            first_tx, last_tx, address_txs = self.save_transactions(transactions)
-            block['transactionIndexRange'] = str(first_tx) + '-' + str(last_tx)
-            self._highest_block = self.save_block(block) + 1
-            self.save_addresses(addresses, address_txs)
-            if self._highest_block % notify_rate == 0:
-                percentage = (self._highest_block / self.blockchain.get_height()) * 100
-                LOG.info('Blockchain syncing: {:.2f}% done.'.format(percentage))
-                print('end: {}'.format(datetime.now()))
-                return
+            batch_index += 1
+            # calculate batch range
+            last_block = self._blockchain.get_height() - self._confirmations
+            if self._highest_block + self._bulk_size > last_block:
+                latest_block = last_block
+                stop_iteration = True
+            else:
+                latest_block = self._highest_block + self._bulk_size
 
-    def save_transactions(self, transactions: List[Dict]) -> Tuple[int, int, Dict]:
+            if self._highest_block + self._bulk_size > 30000:
+                break
+
+            # Get data from Node
+            self.create_csv_files(self._highest_block, latest_block)
+
+            # Parse the data
+            blocks, transactions, addresses = self.gather_blocks()
+            if self.gather_tokens_arg:
+                tokens, token_txs = self.gather_tokens()
+            else:
+                tokens, token_txs = ({}, [])
+            if self.process_traces:
+                addresses = self.add_trace_addresses(addresses, self._highest_block, latest_block)
+            if batch_index % 10 == 0:
+                self._save_addresses(addresses, True)
+            else:
+                self._save_addresses(addresses, False)
+            addresses = self.fill_addresses(addresses, transactions, tokens, token_txs)
+            self.update_bulk_db(blocks, transactions, addresses, tokens)
+            self._highest_block = latest_block
+            with open(self.datapath + 'progress.txt', 'w') as f:
+                f.write('{}\n{}'.format(self._highest_block, self._highest_tx))
+
+            if stop_iteration:
+                break
+            percentage = (self._highest_block / last_block) * 100
+            LOG.info('Blockchain syncing: {:.2f}% done.'.format(percentage))
+
+        # Update balances of all addresses
+        self._save_addresses({}, False)
+        self._update_address_balances(last_block)
+
+        if self._blockchain.get_height() - self._confirmations - last_block > 10:
+            return False
+        else:
+            return True
+
+        LOG.info('Bulk database update complete.')
+
+    def create_csv_files(self, first_block: int, last_block: int) -> None:
         """
-        Saves new transactions the the database.
+        Creates csv files holding the new information.
 
         Args:
-            transactions: List of transactions gathered from the blockchain.
+            first_block: First block to be included.
+            last_block: Last block to be included.
+        """
+        # Get blocks and their transactions
+        block_tx_cmd = "ethereumetl export_blocks_and_transactions --start-block {} " \
+                       "--end-block {} --provider-uri {} --blocks-output {} " \
+                       "--transactions-output {}".format(first_block, last_block,
+                                                         self._interface,
+                                                         self.datapath + 'blocks.csv',
+                                                         self.datapath + 'transactions.csv')
+        subprocess.call(block_tx_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # transactions have to be in a correct order, with 2 keys: block_num, tx_index
+        df = pandas.read_csv(self.datapath + 'transactions.csv')
+        df = df.sort_values(['block_number', 'transaction_index'], ascending=[True, True])
+        df.to_csv(self.datapath + 'transactions.csv', index=False)
+
+        # Get transaction hashes
+        tx_hash_cmd = "ethereumetl extract_csv_column --input {} --column hash " \
+                      "--output {}".format(self.datapath + 'transactions.csv',
+                                           self.datapath + 'tx_hashes.txt')
+        subprocess.call(tx_hash_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Get receipts
+        tx_receipts_cmd = "ethereumetl export_receipts_and_logs --transaction-hashes {} " \
+                          " --provider-uri {} --receipts-output {} " \
+                          "--logs-output {}".format(self.datapath + '/tx_hashes.txt',
+                                                    self._interface,
+                                                    self.datapath + 'receipts.csv',
+                                                    self.datapath + 'logs.csv')
+        subprocess.call(tx_receipts_cmd.split(),
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        if self.gather_tokens_arg:
+            self.create_token_csv(first_block, last_block)
+
+    def create_token_csv(self, first_block: int, last_block: int) -> None:
+        """
+        Creates csv file containing information of Token addresses.
+
+        Args:
+            first_block: First block to be included.
+            last_block: Last block to be included.
+        """
+        # get contract addresses
+        contracts_addr_cmd = "ethereumetl extract_csv_column --input {} " \
+                             " --column contract_address " \
+                             "--output {}".format(self.datapath + 'receipts.csv',
+                                                  self.datapath + 'contract_addresses.txt')
+        subprocess.call(contracts_addr_cmd.split(),
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # get contracts
+        # This is a bottleneck basically
+        contracts_cmd = "ethereumetl export_contracts --contract-addresses {} " \
+                        " --provider-uri {} " \
+                        "--output {} ".format(self.datapath + 'contract_addresses.txt',
+                                              self._interface,
+                                              self.datapath + 'contracts.csv')
+        subprocess.call(contracts_cmd.split(),
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Extract token addresses
+        if os.path.isfile(self.datapath + 'contracts.csv'):
+            data = []
+            with open(self.datapath + 'contracts.csv') as f:
+                for row in csv.DictReader(f, delimiter=','):
+                    if row['is_erc20'] == 'True' or row['is_erc721'] == 'True':
+                        data.append(row['address'])
+            with open(self.datapath + 'token_addresses.txt', 'w') as f:
+                f.write('\n'.join(data))
+
+        # get Tokens
+        tokens_cmd = "ethereumetl export_tokens --token-addresses {} " \
+                     " --provider-uri {} " \
+                     "--output {} ".format(self.datapath + 'token_addresses.txt', self._interface,
+                                           self.datapath + 'tokens.csv')
+        subprocess.call(tokens_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        token_tx_cmd = "ethereumetl extract_token_transfers --logs {} " \
+                       "--output {}".format(self.datapath + 'logs.csv',
+                                            self.datapath + 'token_transfers.csv')
+        subprocess.call(token_tx_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def gather_tokens(self) -> Tuple[Dict, List]:
+        """
+        Gathers information about newly created ERC-20 and ERC-721 tokens.
 
         Returns:
-            Indexes for first and last saved transaction.
+            Dictionary of format 'address: token_data', List of token transactions.
         """
-        first = True
-        first_tx = 0
-        address_txs = {}
-        for transaction in transactions:
-            tx_value = coder.encode_transaction(transaction)
-            self._highest_tx += 1
-            if first:
-                first_tx = self._highest_tx
-                first = False
-            self.transaction_db.put(str(self._highest_tx).encode(), tx_value)
-            self.tx_hash_db.put(transaction['hash'].hex().encode(),
-                                str(self._highest_tx).encode())
+        tokens = {}
+        with open(self.datapath + 'tokens.csv') as csv_f:
+            csv_tokens = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_tokens:
+                token = {}
+                token['symbol'] = row['symbol']
+                token['name'] = row['name']
+                token['decimals'] = row['decimals']
+                token['total_supply'] = row['total_supply']
+                tokens[row['address']] = token
 
-            address_txs[transaction['hash'].hex()] = {'transactionIndex': self._highest_tx,
-                                                                 'timestamp': transaction['timestamp'],
-                                                                 'value': transaction['value']}
+        with open(self.datapath + 'contracts.csv') as csv_f:
+            csv_contracts = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_contracts:
+                if row['address'] in tokens:
+                    if row['is_erc20'] == 'True':
+                        tokens[row['address']]['type'] = 'ERC-20'
+                    elif row['is_erc721']:
+                        tokens[row['address']]['type'] = 'ERC-721'
 
-        return (first_tx, self._highest_tx, address_txs)
+        token_txs = []
+        with open(self.datapath + 'token_transfers.csv') as csv_f:
+            csv_tokens_tx = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_tokens_tx:
+                token_tx = {}
+                token_tx['token_address'] = row['token_address']
+                token_tx['from'] = row['from_address']
+                token_tx['to'] = row['to_address']
+                token_tx['value'] = row['value']
 
-    def save_block(self, block: Dict) -> int:
+                token_txs.append(token_tx)
+
+        return (tokens, token_txs)
+
+    def gather_blocks(self) -> Tuple[Dict, Dict, Dict]:
         """
-        Updates the database with new block data.
+        Create dictionary representation of processed blocks.
+
+        Returns:
+            Dictionary of new blocks.
+        """
+        blocks = {}
+        miners = []
+        with open(self.datapath + 'blocks.csv') as csv_f:
+            csv_blocks = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_blocks:
+                block = {}
+                block['number'] = row['number']
+                block['hash'] = row['hash']
+                block['parentHash'] = row['parent_hash']
+                block['nonce'] = row['nonce']
+                block['logsBloom'] = row['logs_bloom']
+                block['miner'] = row['miner']
+                block['difficulty'] = row['difficulty']
+                block['totalDifficulty'] = row['total_difficulty']
+                block['extraData'] = row['extra_data']
+                block['size'] = row['size']
+                block['gasLimit'] = row['gas_limit']
+                block['gasUsed'] = row['gas_used']
+                block['timestamp'] = row['timestamp']
+                block['sha3Uncles'] = row['sha3_uncles']
+                blocks[block['hash']] = block
+                miners.append((block['miner'], block['hash']))
+
+        transactions, addresses = self.gather_transactions(blocks)
+        for miner in miners:
+            if miner[0] not in addresses and miner[0] is not None:
+                addresses[miner[0]] = {'inputTransactionHashes': [],
+                                       'outputTransactionHashes': [],
+                                       'code': '0x',
+                                       'mined': [miner[1]],
+                                       'inputTokenTransactions': [],
+                                       'outputTokenTransactions': []}
+            elif miner[0] is not None:
+                addresses[miner[0]]['mined'].append(miner[1])
+
+        return (blocks, transactions, addresses)
+
+    def gather_transactions(self, blocks: Dict) -> Tuple[Dict, Dict]:
+        """
+        Gathers transactions and adds their range to blocks, as well as to addresses.
 
         Args:
-            block: Dictonary containing the block data.
-        """
-        block_value = coder.encode_block(block)
-        self.blocks_db.put(str(block['number']).encode(), block_value)
-        self.block_hash_db.put(block['hash'].hex().encode(), str(block['number']).encode())
-        self.block_timestamp_db.put(str(block['timestamp']).encode(),
-                                    str(block['number']).encode())
-        return block['number']
+            blocks: Processed blocks.
 
-    def save_addresses(self, addresses: Dict, address_txs: Dict) -> None:
+        Returns: Gathered transactions and addresses.
         """
-        Updates addresses in DB with new data.
+        transactions = {}
+        addresses = {}  # type: Dict[str, Any]
+        current_block_hash = None
+        first_block_tx = None
+        happened_blocks = []  # type: List[str]
+        current_highest_tx = self._highest_tx
 
-        How are indexes and timestamps saved:
-            index+timestamp|index+timestamp|...
+        with open(self.datapath + 'transactions.csv') as csv_f:
+            csv_transactions = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_transactions:
+                transaction = {}
+                if current_block_hash is None:
+                    current_block_hash = row['block_hash']
+                    first_block_tx = self._highest_tx
+                    current_highest_tx = self._highest_tx
+                elif current_block_hash != row['block_hash']:
+                    if current_block_hash in happened_blocks:
+                        print('THIS IS VERY BAD')
+                    else:
+                        happened_blocks.append(current_block_hash)
+                    blocks[current_block_hash]['transactionIndexRange'] = (
+                        str(first_block_tx) + '-' + str(current_highest_tx))
+                    current_block_hash = row['block_hash']
+                    current_highest_tx += 1
+                    self._highest_tx = current_highest_tx
+                    first_block_tx = self._highest_tx
+                elif current_block_hash == row['block_hash']:
+                    current_highest_tx += 1
 
-        args:
-            addresses: List of addresses that were affected.
-            address_txs: Address data that was changed.
+                transaction['blockHash'] = row['block_hash']
+                transaction['blockNumber'] = row['block_number']
+                transaction['from'] = row['from_address']
+                transaction['to'] = row['to_address']
+                transaction['gas'] = row['gas']
+                transaction['gasPrice'] = row['gas_price']
+                transaction['hash'] = row['hash']
+                transaction['input'] = row['input']
+                transaction['nonce'] = row['nonce']
+                transaction['value'] = row['value']
+                transaction['timestamp'] = blocks[current_block_hash]['timestamp']
+                transaction['index'] = str(current_highest_tx)
+
+                if transaction['from'] not in addresses and transaction['from'] is not None:
+                    addresses[transaction['from']] = {'inputTransactionHashes':
+                                                      [transaction['hash']],
+                                                      'outputTransactionHashes': [],
+                                                      'code': '0x',
+                                                      'mined': [],
+                                                      'inputTokenTransactions': [],
+                                                      'outputTokenTransactions': []}
+                elif transaction['from'] is not None:
+                    addresses[transaction['from']]['inputTransactionHashes'].append(
+                        transaction['hash'])
+
+                if transaction['to'] not in addresses and transaction['to'] is not None:
+                    addresses[transaction['to']] = {'inputTransactionHashes': [],
+                                                    'outputTransactionHashes':
+                                                    [transaction['hash']],
+                                                    'code': '0x',
+                                                    'mined': [],
+                                                    'inputTokenTransactions': [],
+                                                    'outputTokenTransactions': []}
+                elif transaction['to'] is not None:
+                    addresses[transaction['to']]['outputTransactionHashes'].append(
+                        transaction['hash'])
+                transactions[transaction['hash']] = transaction
+
+            # Last block transactions of the bulk
+            blocks[current_block_hash]['transactionIndexRange'] = (
+                str(first_block_tx) + '-' + str(current_highest_tx))
+            current_highest_tx += 1
+            self._highest_tx = current_highest_tx
+        transactions, addresses = self.gather_receipts(transactions, addresses)
+        return (transactions, addresses)
+
+    def gather_receipts(self, transactions: Dict, addresses: Dict) -> Tuple[Dict, Dict]:
         """
-        for address in addresses:
-            existing_data = self.address_db.get(address.encode())
+        Gathers receipts of the transactions.
+
+        Args:
+            transactions: Dictionary holding all currently proccessed transactions.
+            addresses: Dictionary holding all currently processed addresses.
+        """
+        with open(self.datapath + 'receipts.csv') as csv_f:
+            csv_receipts = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_receipts:
+                transactions[row['transaction_hash']]['cumulativeGasUsed'] = (
+                    row['cumulative_gas_used'])
+                transactions[row['transaction_hash']]['gasUsed'] = row['gas_used']
+                transactions[row['transaction_hash']]['contractAddress'] = row['contract_address']
+
+                if (row['contract_address'] not in addresses
+                        and row['contract_address'] is not None):
+                    code = self._blockchain.get_code(row['contract_address'])
+                    addresses[row['contract_address']] = {'inputTransactionHashes': [],
+                                                          'outputTransactionHashes': [],
+                                                          'code': code.hex(),
+                                                          'mined': [],
+                                                          'inputTokenTransactions': [],
+                                                          'outputTokenTransactions': []}
+        with open(self.datapath + 'logs.csv') as csv_f:
+            csv_logs = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_logs:
+                transactions[row['transaction_hash']]['logs'] = row['data']
+
+        return (transactions, addresses)
+
+    def add_trace_addresses(self, addresses: Dict, first_block: int, last_block: int) -> Dict:
+        """
+        Adds trace addresses to a list of addresses.
+
+        Args:
+            addresses: Already gathered addresses.
+            first_block: Start of the block range.
+            last_block: End block of the block range.
+
+        Returns:
+            Full address list.
+        """
+        address_gatherer = TraceAddressGatherer(self._interface)
+        trace_addresses = address_gatherer._gather_addresses(first_block, last_block)
+
+        for address in trace_addresses:
+            if address not in addresses:
+                addresses[address] = {'inputTransactionHashes': [],
+                                      'outputTransactionHashes': [],
+                                      'code': '0x',
+                                      'mined': [],
+                                      'inputTokenTransactions': [],
+                                      'outputTokenTransactions': []}
+
+        return addresses
+
+    def fill_addresses(self, addresses: Dict, transactions: Dict,
+                       tokens: Dict, token_txs: List) -> Dict:
+        """
+        Fill addresses with transaction information.
+
+        Args:
+            addresses: Currently processed addresses.
+            transactions: Currently processed transactions.
+            tokens: Currently processed tokens.
+            token_txs: Currently processed token transactions.
+
+        Returns:
+            Addresses with new information.
+        """
+        addresses = self.init_fill_addrs_token_data(addresses, token_txs)
+        addresses_encode = {}
+        for addr_hash, addr_dict in addresses.items():
+            existing_data = self.address_db.get(addr_hash.encode())
             # Address not yet in records
             if existing_data is not None:
                 existing_address = coder.decode_address(existing_data)
                 input_tx_str = existing_address['inputTransactionIndexes']
                 output_tx_str = existing_address['outputTransactionIndexes']
+                mined_str = existing_address['mined']
             else:
                 input_tx_str = ''
                 output_tx_str = ''
+                mined_str = ''
 
             address_encode = {}
-            address_encode['balance'] = addresses[address]['balance']
-            address_encode['code'] = addresses[address]['code']
-            for input_tx in addresses[address]['inputTransactionHashes']:
-                input_tx_str += ('|' + str(address_txs[input_tx]['transactionIndex'])
-                                 + '+' + str(address_txs[input_tx]['timestamp'])
-                                 + '+' + str(address_txs[input_tx]['value']))
-            if existing_data is None:
+            if addr_hash in tokens:
+                if tokens[addr_hash]['type'] == 'ERC-20':
+                    address_encode['tokenContract'] = 'ERC-20'
+                elif tokens[addr_hash['type']] == 'ERC-721':
+                    address_encode['tokenContract'] = 'ERC-721'
+            else:
+                address_encode['tokenContract'] = 'False'
+
+            address_encode['balance'] = 'null'
+            address_encode['code'] = addr_dict['code']
+            for input_tx in addr_dict['inputTransactionHashes']:
+                input_tx_str += ('|' + str(transactions[input_tx]['index'])
+                                 + '+' + str(transactions[input_tx]['timestamp'])
+                                 + '+' + str(transactions[input_tx]['value']))
+            if input_tx_str != '' and input_tx_str[0] == '|':
                 input_tx_str = input_tx_str[1:]
             address_encode['inputTransactionIndexes'] = input_tx_str
-            for output_tx in addresses[address]['outputTransactionHashes']:
-                output_tx_str += ('|' + str(address_txs[output_tx]['transactionIndex'])
-                                  + '+' + str(address_txs[output_tx]['timestamp'])
-                                  + '+' + str(address_txs[input_tx]['value']))
-            if existing_data is None:
+            for output_tx in addr_dict['outputTransactionHashes']:
+                output_tx_str += ('|' + str(transactions[output_tx]['index'])
+                                  + '+' + str(transactions[output_tx]['timestamp'])
+                                  + '+' + str(transactions[input_tx]['value']))
+            if output_tx_str != '' and output_tx_str[0] == '|':
                 output_tx_str = output_tx_str[1:]
             address_encode['outputTransactionIndexes'] = output_tx_str
+            for block_hash in addr_dict['mined']:
+                mined_str += ('|' + str(block_hash))
+            if mined_str != '' and mined_str[0] == '|':
+                mined_str = mined_str[1:]
+            address_encode['mined'] = mined_str
 
-            address_value = coder.encode_address(address_encode)
-            self.address_db.put(address.encode(), address_value)
+            addresses_encode[addr_hash] = address_encode
+        # Also add token information to the addresses.
+        updated_tokens = self.expand_tokens(tokens, token_txs)
+        addresses_encode = self.fill_addrs_token_txs(addresses, addresses_encode, updated_tokens)
+        return addresses_encode
+
+    def init_fill_addrs_token_data(self, addresses: Dict, token_txs: List) -> Dict:
+        """
+        Fill address structures with initial token information.
+
+        Args:
+            addresses: Addresses containing workable data.
+            token_txs: List of token transactions.
+
+        Returns:
+            Addresses enriched with token transactions data.
+        """
+        for token_tx in token_txs:
+            if token_tx['from'] not in addresses and token_tx['from'] is not None:
+                addresses[token_tx['from']] = {'inputTransactionHashes': [],
+                                               'outputTransactionHashes': [],
+                                               'code': '0x',
+                                               'mined': [],
+                                               'inputTokenTransactions': [],
+                                               'outputTokenTransactions': [token_tx]}
+            elif token_tx['from'] is not None:
+                addresses[token_tx['from']]['outputTokenTransactions'].append(token_tx)
+
+            if token_tx['to'] not in addresses and token_tx['to'] is not None:
+                addresses[token_tx['to']] = {'inputTransactionHashes': [],
+                                             'outputTransactionHashes': [],
+                                             'code': '0x',
+                                             'mined': [],
+                                             'inputTokenTransactions': [token_tx],
+                                             'outputTokenTransactions': []}
+            elif token_tx['to'] is not None:
+                addresses[token_tx['to']]['inputTokenTransactions'].append(token_tx)
+
+        return addresses
+
+    def expand_tokens(self, tokens: Dict, token_txs: List) -> Dict:
+        """
+        Expand token list to make token information more available.
+
+        Args:
+            tokens: Tokens gathered so far (in this batch).
+            token_txs: Token transactions to get other token info.
+
+        Returns:
+            Updated token list.
+        """
+        updated_tokens = tokens.copy()
+        for token_tx in token_txs:
+            if token_tx['token_address'] not in updated_tokens:
+                data = self.token_db.get(token_tx['token_address'].encode())
+                if data is not None:
+                    updated_tokens[token_tx['token_address']] = coder.decode_token(data)
+
+        return updated_tokens
+
+    def fill_addrs_token_txs(self, addresses: Dict, addresses_encode: Dict, tokens: Dict) -> Dict:
+        """
+        Fills address information with token transactions and balance changes.
+
+        Args:
+            addresses: Currently processed addresses.
+            addresses_encode: Addresses partially prepared for DB write.
+            tokens: All relevant tokens.
+
+        Returns:
+            Updated addresses.
+        """
+        for addr_hash, addr_dict in addresses.items():
+            existing_data = self.address_db.get(addr_hash.encode())
+            # Address not yet in records
+            if existing_data is not None:
+                existing_address = coder.decode_address(existing_data)
+                input_token_txs_str = existing_address['inputTokenTransactions']
+                output_token_txs_str = existing_address['outputTokenTransactions']
+            else:
+                input_token_txs_str = ''
+                output_token_txs_str = ''
+
+            for input_token_tx in addr_dict['inputTokenTransactions']:
+                # If suitable token for the transaction wasn't found, it likely means that this
+                # token doesn't FULLY adhere to ERC-20/ERC-721 standard and will not be included.
+                if input_token_tx['token_address'] not in tokens:
+                    continue
+
+                input_token_txs_str += ('|' + str(input_token_tx['token_address'])
+                                        + '+' + str(input_token_tx['from'])
+                                        + '+' + str(input_token_tx['value']))
+
+            if input_token_txs_str != '' and input_token_txs_str[0] == '|':
+                input_token_txs_str = input_token_txs_str[1:]
+            addresses_encode[addr_hash]['inputTokenTransactions'] = input_token_txs_str
+
+            for output_token_tx in addr_dict['outputTokenTransactions']:
+                if output_token_tx['token_address'] not in tokens:
+                    continue
+                output_token_txs_str += ('|' + str(output_token_tx['token_address'])
+                                         + '+' + str(output_token_tx['to'])
+                                         + '+' + str(output_token_tx['value']))
+
+            if output_token_txs_str != '' and output_token_txs_str[0] == '|':
+                output_token_txs_str = output_token_txs_str[1:]
+            addresses_encode[addr_hash]['outputTokenTransactions'] = output_token_txs_str
+
+        return addresses_encode
+
+    def update_bulk_db(self, blocks: Dict, transactions: Dict,
+                       addresses: Dict, tokens: Dict) -> None:
+        """
+        Updates the database with bulk data.
+
+        Args:
+            blocks: Dictionary containing blocks.
+            transactions: Dictionary containing transactions.
+            addresses: Dictionary containing addresses.
+            tokens: Dictionary containing tokens.
+        """
+        with self.db.write_batch() as wb:
+            for block_hash, block_dict in blocks.items():
+                if 'transactionIndexRange' not in block_dict:
+                    block_dict['transactionIndexRange'] = ''
+                block_value = coder.encode_block(block_dict)
+                wb.put(b'block-' + str(block_dict['number']).encode(), block_value)
+                wb.put(b'hash-block-' + str(block_dict['hash']).encode(),
+                       str(block_dict['number']).encode())
+                wb.put(b'timestamp-block-' + str(block_dict['timestamp']).encode(),
+                       str(block_dict['number']).encode())
+
+            for tx_hash, tx_dict in transactions.items():
+                if 'logs' not in tx_dict:
+                    tx_dict['logs'] = ''
+                tx_value = coder.encode_transaction(tx_dict)
+                wb.put(b'transaction-' + str(tx_dict['index']).encode(), tx_value)
+                wb.put(b'tx-hash-' + tx_hash.encode(), str(tx_dict['index']).encode())
+
+            for addr_hash, addr_dict in addresses.items():
+                address_value = coder.encode_address(addr_dict)
+                wb.put(b'address-' + str(addr_hash).encode(), address_value)
+
+            for addr_hash, token_dict in tokens.items():
+                token_value = coder.encode_token(token_dict)
+                wb.put(b'token-' + str(addr_hash).encode(), token_value)
+
+    def _save_addresses(self, addresses: Dict, sort: bool) -> None:
+        """
+        Add new addresses to a file, while removing duplicates.
+
+        Args:
+            addresses: Addresses gathered in this batch.
+            sort: Whether to sort and filter uniue addresses.
+        """
+        addr_str = '\n' + '\n'.join(addresses.keys())
+        with open(self.datapath + 'addresses.txt', 'a+') as f:
+            f.write(addr_str)
+
+        if sort:
+            sort_cmd = 'sort -u {} -o {}'.format(self.datapath + 'addresses.txt',
+                                                 self.datapath + 'addresses.txt')
+            subprocess.call(sort_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def _update_address_balances(self, blockchain_height: int) -> None:
+        """
+        Load relevant addresses from tmp file, get their balances from Node and save them to DB.
+
+        During this update new data will be added to blockchain and thus the DB will be out of date
+        by the time it is completed. Small out of date-ness is acceptable but a longer one
+        will probabbly need to trigger a new batch update.
+
+        Args:
+            blockchain_height: Height at which sync was completed.
+        """
+        balance_gatherer = BalanceGatherer(self._interface)
+        continue_iteration = True
+
+        with open(self.datapath + 'addresses.txt', 'r') as f:
+            while continue_iteration:
+                addresses = []
+                for i in range(self._bulk_size):
+                    line = f.readline()
+                    if line == '':
+                        continue_iteration = False
+                        break
+                    addresses.append(line[:-1])
+                balances = balance_gatherer._gather_balances(addresses, blockchain_height)
+                self._update_db_balances(balances)
+
+        if os.path.exists(self.datapath + 'addresses.txt'):
+            os.remove(self.datapath + 'addresses.txt')
+
+    def _update_db_balances(self, addr_balances: Dict) -> None:
+        """
+        Updates balances of Ethereum addresses.
+
+        Args:
+            addr_balances: Dictionary containing 'address: balance' entries.
+        """
+        address_objects = {}
+        for address in addr_balances:
+            raw_addr = self.address_db.get(str(address).encode())
+            address_objects[address] = coder.decode_address(raw_addr)
+            address_objects[address]['balance'] = addr_balances[address]
+        with self.db.write_batch() as wb:
+            for address in address_objects:
+                address_value = coder.encode_address(address_objects[address])
+                wb.put(b'address-' + str(address).encode(), address_value)
 
 
 @setup_database
 def update_database(db_location: str,
                     db_lock: Any,
-                    blockchain: Any,
+                    interface: str,
+                    confirmations: int,
+                    bulk_size: int,
+                    process_traces: bool,
+                    datapath: str,
+                    gather_tokens: bool,
                     db: Any = None) -> None:
     """
     Updates database with new entries.
@@ -178,5 +722,13 @@ def update_database(db_location: str,
           blockchain: Instance of the blockchain wrapper.
           db: Database instance.
     """
-    db_updater = DatabaseUpdater(db, blockchain)
-    db_updater.fill_database()
+    db_updater = DatabaseUpdater(db, interface, confirmations,
+                                 bulk_size, process_traces, datapath, gather_tokens)
+    # sync occurs multiple times as present will change before sync is completed.
+    while True:
+        fell_behind = db_updater.fill_database()
+        # TODO: for testing purposes
+        fell_behind = False
+        # If during sync the updater didn't fall too far behind, consider sync finished
+        if not fell_behind:
+            break

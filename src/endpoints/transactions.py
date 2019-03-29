@@ -1,9 +1,6 @@
 """Functions for gathering block information from the database."""
 
-# import plyvel
-# from flask import current_app
 from typing import List
-import sys
 import time
 
 from src.common import setup_database
@@ -80,26 +77,26 @@ def get_transactions_by_address(address: str,
     """
     try:
         int_time_from = int(time_from)
-    except ValueError as e:
+    except ValueError:
         return 'Start time {} couldn\'t be parsed.'.format(time_from), 400
 
     if time_to == '':
         time_to = str(int(time.time()) + 1000000)
     try:
         int_time_to = int(time_to)
-    except ValueError as e:
+    except ValueError:
         return 'End time {} couldn\'t be parsed.'.format(time_to), 400
 
     try:
         int_val_from = int(val_from)
-    except ValueError as e:
+    except ValueError:
         return 'Minimum value {} couldn\'t be parsed.'.format(val_from), 400
-    
+
     if val_to == '':
         val_to = str(1000000000000000000000000000000)
     try:
         int_val_to = int(val_to)
-    except ValueError as e:
+    except ValueError:
         return 'Maximum value {} couldn\'t be parsed.'.format(val_to), 400
 
     if int_time_from > int_time_to:
@@ -135,26 +132,26 @@ def get_transactions_by_addresses(addresses: List[str],
     """
     try:
         int_time_from = int(time_from)
-    except ValueError as e:
+    except ValueError:
         return 'Start time {} couldn\'t be parsed.'.format(time_from), 400
 
     if time_to == '':
         time_to = str(int(time.time()) + 1000000)
     try:
         int_time_to = int(time_to)
-    except ValueError as e:
+    except ValueError:
         return 'End time {} couldn\'t be parsed.'.format(time_to), 400
 
     try:
         int_val_from = int(val_from)
-    except ValueError as e:
+    except ValueError:
         return 'Minimum value {} couldn\'t be parsed.'.format(val_from), 400
-    
+
     if val_to == '':
         val_to = str(1000000000000000000000000000000)
     try:
         int_val_to = int(val_to)
-    except ValueError as e:
+    except ValueError:
         return 'Maximum value {} couldn\'t be parsed.'.format(val_to), 400
 
     if int_time_from > int_time_to:
@@ -164,8 +161,9 @@ def get_transactions_by_addresses(addresses: List[str],
     gatherer = DatabaseGatherer(db)
     transactions = []
     for address in addresses:
-        new_transactions = gatherer.get_transactions_of_address(address, int_time_from, int_time_to,
-                                                             int_val_from, int_val_to)
+        new_transactions = gatherer.get_transactions_of_address(address,
+                                                                int_time_from, int_time_to,
+                                                                int_val_from, int_val_to)
         if new_transactions is None:
             return 'Address {} has not been found'.format(address), 400
         transactions += new_transactions

@@ -4,9 +4,7 @@
 from time import sleep
 from multiprocessing import Process, Lock
 import argparse
-import cProfile
 import os
-import sys
 
 import connexion
 import plyvel
@@ -14,19 +12,12 @@ from typing import Any
 import logging
 
 import src.database_updater as database_updater
-import src.bulk_database_updater as bulk_database_updater
 from src.blockchain_wrapper import BlockchainWrapper
-from src.database_gatherer import DatabaseGatherer
-
-# TODO: CHANGE THINGS TO TEST BULK
-# TODO: Add traces
-# TODO: Add token transactions
-# TODO: Save addresses to pytables??
-# TODO: Implement token gathering.
 
 logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
+
 
 def blockchain_daemon(db_location: str, db_lock: Any, blockchain: Any, refresh: int) -> None:
     """
@@ -61,13 +52,14 @@ def add_args(parser: Any) -> None:
     parser.add_argument('--bulk_size', type=int, default=10000,
                         help='How many blocks should be processed at once.')
     parser.add_argument('--parse_traces', type=bool, default=False,
-                        help='Whether the internal transactions should be examined as well.' \
-                              'Warning: May take a long time.')
+                        help='Whether the internal transactions should be examined as well.'
+                             'Warning: May take a long time.')
     parser.add_argument('--datapath', type=str, default='data/',
-                        help='Path, where temporary update data should be saved.' \
+                        help='Path, where temporary update data should be saved.'
                              'Warning: It will reach several GBs during the initial sync.')
     parser.add_argument('--gather_tokens', type=bool, default=False,
                         help='If the blockchain explorer should also gather token data.')
+
 
 def init_data_dir(datapath: str):
     """
@@ -78,7 +70,7 @@ def init_data_dir(datapath: str):
     """
     if not os.path.exists(datapath) or not os.path.isdir(datapath):
         os.mkdir(datapath)
-    
+
     if not os.path.exists(datapath + '/progress.txt'):
         with open(datapath + '/progress.txt', 'w+') as f:
             f.write('0\n0')
@@ -100,15 +92,15 @@ def main():
     init_data_dir(datapath)
     blockchain = BlockchainWrapper(args.interface, args.confirmations)
     # Before API interface is started, database is created/updated.
-    bulk_database_updater.update_database(args.dbpath, db_lock, args.interface,
-                                          args.confirmations, args.bulk_size,
-                                          args.parse_traces, datapath, args.gather_tokens)
-    # sys.exit(0)
-    # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
-    #                                                               db_lock,
-    #                                                               blockchain,
-    #                                                               args.refresh))
-    # blockchain_daemon_p.start()
+    database_updater.update_database(args.dbpath, db_lock, args.interface,
+                                     args.confirmations, args.bulk_size,
+                                     args.parse_traces, datapath, args.gather_tokens)
+
+    blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
+                                                                  db_lock,
+                                                                  blockchain,
+                                                                  args.refresh))
+    blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
     app.app.config['DB_LOCK'] = db_lock
@@ -117,5 +109,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # cProfile.run('main()')
     main()
