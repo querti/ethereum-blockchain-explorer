@@ -384,20 +384,24 @@ class DatabaseGatherer:
         for input_token_tx in input_token_txs:
             if input_token_tx == '':
                 break
-            contract_addr, addr_from, value = input_token_tx.split('+')
+            contract_addr, addr_from, value, tx_hash, timestamp = input_token_tx.split('+')
             address['inputTokenTransactions'].append({'contract_address': contract_addr,
                                                       'address_from': addr_from,
-                                                      'value': value})
+                                                      'value': value,
+                                                      'transaction_hash': tx_hash,
+                                                      'timestamp': timestamp})
 
         output_token_txs = address['outputTokenTransactions'].split('|')
         address['outputTokenTransactions'] = []
         for output_token_tx in output_token_txs:
             if output_token_tx == '':
                 break
-            contract_addr, addr_to, value = output_token_tx.split('+')
+            contract_addr, addr_to, value, tx_hash, timestamp = output_token_tx.split('+')
             address['outputTokenTransactions'].append({'contract_address': contract_addr,
                                                        'address_to': addr_to,
-                                                       'value': value})
+                                                       'value': value,
+                                                       'transaction_hash': tx_hash,
+                                                       'timestamp': timestamp})
 
         return address
 

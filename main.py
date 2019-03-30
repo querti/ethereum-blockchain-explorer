@@ -11,27 +11,35 @@ import plyvel
 from typing import Any
 import logging
 
-import src.database_updater as database_updater
-from src.blockchain_wrapper import BlockchainWrapper
+import src.updater.database_updater as database_updater
 
 logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
 
 
-def blockchain_daemon(db_location: str, db_lock: Any, blockchain: Any, refresh: int) -> None:
+def blockchain_daemon(db_location: str, db_lock: Any, interface: str, confirmations: int,
+                      bulk_size: int, parse_traces: bool,
+                      datapath: str, gather_tokens: bool, refresh: int) -> None:
     """
     Updates the leveldb database while REST API is already running.
 
     Args:
-        db_location: Path to the leveldb database.
-        db_lock: Instance of the database lock (to prevent multiple access).
-        blockchain: Instance of the blockchain wrapper.
-        refresh: How many seconds to sleep until database is refreshed.
+        db_location: Where the DB is located.
+        db_lock: DB lock for exclusive access.
+        interface: Path to the Geth blockchain node.
+        confirmations: How many confirmations a block has to have.
+        bulk_size: How many blocks to be included in bulk DB update.
+        process_traces: Whether to get addresses from traces.
+        datapath: Path for temporary file created in DB creation.
+        gather_tokens: Whether to also gather token information.
+        refresh: How often should the DB be updated.
     """
     while True:
         sleep(refresh)
-        database_updater.update_database(db_location, db_lock, blockchain)
+        database_updater.update_database(db_location, db_lock, interface,
+                                         confirmations, bulk_size,
+                                         parse_traces, datapath, gather_tokens)
 
 
 def add_args(parser: Any) -> None:
@@ -90,7 +98,6 @@ def main():
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
-    blockchain = BlockchainWrapper(args.interface, args.confirmations)
     # Before API interface is started, database is created/updated.
     database_updater.update_database(args.dbpath, db_lock, args.interface,
                                      args.confirmations, args.bulk_size,
@@ -98,7 +105,12 @@ def main():
 
     blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
                                                                   db_lock,
-                                                                  blockchain,
+                                                                  args.interface,
+                                                                  args.confirmations,
+                                                                  args.bulk_size,
+                                                                  args.parse_traces,
+                                                                  datapath,
+                                                                  args.gather_tokens,
                                                                   args.refresh))
     blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
