@@ -5,17 +5,17 @@
 from typing import List
 import time
 
-from src.common import setup_database
+from flask import current_app
+
 from src.database_gatherer import DatabaseGatherer
 
 
-@setup_database
 def read_address(addr: str,
                  time_from: str = '0',
                  time_to: str = '',
                  val_from: str = '0',
                  val_to: str = '',
-                 no_tx_list: str = '', db=None) -> None:
+                 no_tx_list: str = '') -> None:
     """
     Get information about an address, including its transactions.
 
@@ -28,6 +28,7 @@ def read_address(addr: str,
         no_tx_list: Maximum transactions to gather.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -73,14 +74,14 @@ def read_address(addr: str,
     return full_address
 
 
-@setup_database
-def get_balance(addr: str, db=None) -> None:
+def get_balance(addr: str) -> None:
     """
     Get balance of an address.
 
     Args:
         address: Ethereum address.
     """
+    db = current_app.config['DB']
     gatherer = DatabaseGatherer(db)
     balance = gatherer.get_balance(addr)
     if balance is None:
@@ -89,13 +90,12 @@ def get_balance(addr: str, db=None) -> None:
     return balance
 
 
-@setup_database
 def read_addresses(addrs: List[str],
                    time_from: str = '0',
                    time_to: str = '',
                    val_from: str = '0',
                    val_to: str = '',
-                   no_tx_list: str = '', db=None) -> None:
+                   no_tx_list: str = '') -> None:
     """
     Get information about multiple addresses, including their transactions.
 
@@ -108,6 +108,7 @@ def read_addresses(addrs: List[str],
         no_tx_list: Maximum transactions to gather.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -154,14 +155,14 @@ def read_addresses(addrs: List[str],
     return full_addresses
 
 
-@setup_database
-def get_token(addr: str, db=None) -> None:
+def get_token(addr: str) -> None:
     """
     Get information about a token specified by its address.
 
     Args:
         addr: Specified token address.
     """
+    db = current_app.config['DB']
     gatherer = DatabaseGatherer(db)
     token = gatherer.get_token(addr)
     if token is None:

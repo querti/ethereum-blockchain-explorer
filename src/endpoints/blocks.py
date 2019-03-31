@@ -1,18 +1,16 @@
 """Functions for gathering block information from the database."""
 
-# import plyvel
-# from flask import current_app
 import logging
 import time
 
-from src.common import setup_database
+from flask import current_app
+
 from src.database_gatherer import DatabaseGatherer
 
 LOG = logging.getLogger()
 
 
-@setup_database
-def read_block(block_hash: str, db=None) -> None:
+def read_block(block_hash: str) -> None:
     """
     Read one block by its hash.
 
@@ -20,6 +18,7 @@ def read_block(block_hash: str, db=None) -> None:
         block_hash: Unique hash of the block.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     gatherer = DatabaseGatherer(db)
     block = gatherer.get_block_by_hash(block_hash)
     if block is None:
@@ -28,8 +27,7 @@ def read_block(block_hash: str, db=None) -> None:
     return block
 
 
-@setup_database
-def get_hash_by_index(block_index: str, db=None) -> None:
+def get_hash_by_index(block_index: str) -> None:
     """
     Get block hash by its index.
 
@@ -37,6 +35,7 @@ def get_hash_by_index(block_index: str, db=None) -> None:
         block_index: Index of the block.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     try:
         int(block_index)
     except ValueError:
@@ -50,10 +49,9 @@ def get_hash_by_index(block_index: str, db=None) -> None:
     return block_hash
 
 
-@setup_database
 def get_blocks_by_time(limit: str = '0',
                        block_start: str = '0',
-                       block_end: str = '', db=None) -> None:
+                       block_end: str = '') -> None:
     """
     Get multiple blocks by datetime range.
 
@@ -63,6 +61,7 @@ def get_blocks_by_time(limit: str = '0',
         block_end: End datetime.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     if block_end == '':
         block_end = str(int(time.time()) + 1000000)
     try:
@@ -89,7 +88,6 @@ def get_blocks_by_time(limit: str = '0',
     return blocks
 
 
-@setup_database
 def get_blocks_by_indexes(index_start: str = 0,
                           index_end: str = 'max', db=None) -> None:
     """
@@ -100,6 +98,7 @@ def get_blocks_by_indexes(index_start: str = 0,
         index_end: End index.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     try:
         int_index_start = int(index_start)
     except ValueError:

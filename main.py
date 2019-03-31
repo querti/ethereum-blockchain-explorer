@@ -7,7 +7,7 @@ import argparse
 import os
 
 import connexion
-import plyvel
+import rocksdb
 from typing import Any
 import logging
 
@@ -18,15 +18,14 @@ LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
 
 
-def blockchain_daemon(db_location: str, db_lock: Any, interface: str, confirmations: int,
+def blockchain_daemon(db_location: str, interface: str, confirmations: int,
                       bulk_size: int, parse_traces: bool,
-                      datapath: str, gather_tokens: bool, refresh: int) -> None:
+                      datapath: str, gather_tokens: bool, refresh: int, db) -> None:
     """
     Updates the leveldb database while REST API is already running.
 
     Args:
         db_location: Where the DB is located.
-        db_lock: DB lock for exclusive access.
         interface: Path to the Geth blockchain node.
         confirmations: How many confirmations a block has to have.
         bulk_size: How many blocks to be included in bulk DB update.
@@ -37,9 +36,9 @@ def blockchain_daemon(db_location: str, db_lock: Any, interface: str, confirmati
     """
     while True:
         sleep(refresh)
-        database_updater.update_database(db_location, db_lock, interface,
+        database_updater.update_database(db_location, interface,
                                          confirmations, bulk_size,
-                                         parse_traces, datapath, gather_tokens)
+                                         parse_traces, datapath, gather_tokens, db)
 
 
 def add_args(parser: Any) -> None:
@@ -91,31 +90,31 @@ def main():
     add_args(parser)
     args = parser.parse_args()
 
-    db = plyvel.DB(args.dbpath, create_if_missing=True)
-    db.close()
     db_lock = Lock()
     datapath = args.datapath
+    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
+    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True), read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
     # Before API interface is started, database is created/updated.
-    database_updater.update_database(args.dbpath, db_lock, args.interface,
+    database_updater.update_database(args.dbpath, args.interface,
                                      args.confirmations, args.bulk_size,
-                                     args.parse_traces, datapath, args.gather_tokens)
+                                     args.parse_traces, datapath, args.gather_tokens, db)
 
     blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
-                                                                  db_lock,
                                                                   args.interface,
                                                                   args.confirmations,
                                                                   args.bulk_size,
                                                                   args.parse_traces,
                                                                   datapath,
                                                                   args.gather_tokens,
-                                                                  args.refresh))
+                                                                  args.refresh, db))
     blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
     app.app.config['DB_LOCK'] = db_lock
+    app.app.config['DB'] = read_db
     app.add_api('swagger.yaml')
     app.run()
 

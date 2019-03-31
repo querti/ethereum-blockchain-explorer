@@ -25,7 +25,7 @@ def encode_transaction(transaction: Dict) -> bytes:
         tx_str += transaction['to'] + '\0'
     tx_str += transaction['gas'] + '\0'
     tx_str += transaction['gasPrice'] + '\0'
-    tx_str += transaction['hash'] + '\0'
+    # tx_str += transaction['hash'] + '\0'
     tx_str += transaction['input'] + '\0'
     tx_str += transaction['nonce'] + '\0'
     tx_str += transaction['blockNumber'] + '\0'
@@ -58,16 +58,16 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     transaction['to'] = tx_items[3]
     transaction['gas'] = tx_items[4]
     transaction['gasPrice'] = tx_items[5]
-    transaction['transactionHash'] = tx_items[6]
-    transaction['input'] = tx_items[7]
-    transaction['nonce'] = tx_items[8]
-    transaction['transactionBlockIndex'] = tx_items[9]
-    transaction['value'] = tx_items[10]
-    transaction['cumulativeGasUsed'] = tx_items[11]
-    transaction['gasUsed'] = tx_items[12]
-    transaction['logs'] = tx_items[13]
-    transaction['contract_address'] = tx_items[14]
-    transaction['timestamp'] = tx_items[15]
+    # transaction['transactionHash'] = tx_items[6]
+    transaction['input'] = tx_items[6]
+    transaction['nonce'] = tx_items[7]
+    transaction['transactionBlockIndex'] = tx_items[8]
+    transaction['value'] = tx_items[9]
+    transaction['cumulativeGasUsed'] = tx_items[10]
+    transaction['gasUsed'] = tx_items[11]
+    transaction['logs'] = tx_items[12]
+    transaction['contract_address'] = tx_items[13]
+    transaction['timestamp'] = tx_items[14]
 
     return transaction
 
@@ -95,8 +95,9 @@ def encode_block(block: Dict) -> bytes:
     block_str += block['gasLimit'] + '\0'
     block_str += block['gasUsed'] + '\0'
     block_str += block['timestamp'] + '\0'
-    block_str += block['transactionIndexRange'] + '\0'
+    # block_str += block['transactionIndexRange'] + '\0'
     block_str += block['sha3Uncles'] + '\0'
+    block_str += block['transactions']
     # REWARD?????
     # block_str += block['hasREWARD???h'] + '\0'
 
@@ -128,8 +129,9 @@ def decode_block(raw_block: bytes) -> Dict:
     block['gasLimit'] = block_items[9]
     block['gasUsed'] = block_items[10]
     block['timestamp'] = block_items[11]
-    block['transactionIndexRange'] = block_items[12]
-    block['sha3Uncles'] = block_items[13]
+    # block['transactionIndexRange'] = block_items[12]
+    block['sha3Uncles'] = block_items[12]
+    block['transactions'] = block_items[13]
     # REWARD????
     # block['hasREWARD???h'] + '\0'
 
@@ -149,8 +151,8 @@ def encode_address(address: Dict) -> bytes:
     address_str = ''
     address_str += address['balance'] + '\0'
     address_str += address['code'] + '\0'
-    address_str += address['inputTransactionIndexes'] + '\0'
-    address_str += address['outputTransactionIndexes'] + '\0'
+    address_str += address['inputTransactions'] + '\0'
+    address_str += address['outputTransactions'] + '\0'
     address_str += address['mined'] + '\0'
     address_str += address['tokenContract'] + '\0'
     address_str += address['inputTokenTransactions'] + '\0'
@@ -174,8 +176,8 @@ def decode_address(raw_address: bytes) -> Dict:
 
     address['balance'] = address_items[0]
     address['code'] = address_items[1]
-    address['inputTransactionIndexes'] = address_items[2]
-    address['outputTransactionIndexes'] = address_items[3]
+    address['inputTransactions'] = address_items[2]
+    address['outputTransactions'] = address_items[3]
     address['mined'] = address_items[4]
     address['tokenContract'] = address_items[5]
     address['inputTokenTransactions'] = address_items[6]

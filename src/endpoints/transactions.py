@@ -3,12 +3,12 @@
 from typing import List
 import time
 
-from src.common import setup_database
+from flask import current_app
+
 from src.database_gatherer import DatabaseGatherer
 
 
-@setup_database
-def read_transaction(tx_hash: str, db=None) -> None:
+def read_transaction(tx_hash: str) -> None:
     """
     Get transaction by its hash.
 
@@ -16,6 +16,7 @@ def read_transaction(tx_hash: str, db=None) -> None:
         tx_hash: Hash of the transaction.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     gatherer = DatabaseGatherer(db)
     transaction = gatherer.get_transaction_by_hash(tx_hash)
     if transaction is None:
@@ -24,7 +25,6 @@ def read_transaction(tx_hash: str, db=None) -> None:
     return transaction
 
 
-@setup_database
 def get_transactions_by_bhash(block_hash: str, db=None) -> None:
     """
     Get transactions of a block by its hash.
@@ -33,6 +33,7 @@ def get_transactions_by_bhash(block_hash: str, db=None) -> None:
         block_hash: Hash of the block.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     gatherer = DatabaseGatherer(db)
     transactions = gatherer.get_transactions_of_block_by_hash(block_hash)
     if transactions is None:
@@ -41,8 +42,7 @@ def get_transactions_by_bhash(block_hash: str, db=None) -> None:
     return transactions
 
 
-@setup_database
-def get_transactions_by_bindex(block_index: str, db=None) -> None:
+def get_transactions_by_bindex(block_index: str) -> None:
     """
     Get transactions of a block by its index.
 
@@ -50,6 +50,7 @@ def get_transactions_by_bindex(block_index: str, db=None) -> None:
         block_index: Index of the block.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     gatherer = DatabaseGatherer(db)
     transactions = gatherer.get_transactions_of_block_by_index(block_index)
     if transactions is None:
@@ -58,12 +59,11 @@ def get_transactions_by_bindex(block_index: str, db=None) -> None:
     return transactions
 
 
-@setup_database
 def get_transactions_by_address(address: str,
                                 time_from: str = '0',
                                 time_to: str = '',
                                 val_from: str = '0',
-                                val_to: str = '', db=None) -> None:
+                                val_to: str = '') -> None:
     """
     Get transactions of an address.
 
@@ -75,6 +75,7 @@ def get_transactions_by_address(address: str,
         val_to: Maximum transferred currency of transactions.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -113,12 +114,11 @@ def get_transactions_by_address(address: str,
     return transactions
 
 
-@setup_database
 def get_transactions_by_addresses(addresses: List[str],
                                   time_from: str = '0',
                                   time_to: str = '',
                                   val_from: str = '0',
-                                  val_to: str = '', db=None) -> None:
+                                  val_to: str = '') -> None:
     """
     Get transactions of multiple addresses.
 
@@ -130,6 +130,7 @@ def get_transactions_by_addresses(addresses: List[str],
         val_to: Maximum transferred currency of transactions.
         db: Database instance (meant to be filled by the decorator).
     """
+    db = current_app.config['DB']
     try:
         int_time_from = int(time_from)
     except ValueError:

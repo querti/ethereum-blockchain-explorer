@@ -3,8 +3,6 @@ import subprocess
 import os
 import csv
 
-import pandas
-
 
 class DataRetriever:
     """Retrieves raw data from the blockchain."""
@@ -38,11 +36,6 @@ class DataRetriever:
                                                          self.datapath + 'blocks.csv',
                                                          self.datapath + 'transactions.csv')
         subprocess.call(block_tx_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        # transactions have to be in a correct order, with 2 keys: block_num, tx_index
-        df = pandas.read_csv(self.datapath + 'transactions.csv')
-        df = df.sort_values(['block_number', 'transaction_index'], ascending=[True, True])
-        df.to_csv(self.datapath + 'transactions.csv', index=False)
 
         # Get transaction hashes
         tx_hash_cmd = "ethereumetl extract_csv_column --input {} --column hash " \

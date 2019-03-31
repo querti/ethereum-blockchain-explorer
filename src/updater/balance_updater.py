@@ -1,9 +1,15 @@
 """Class for filling addresses with current balance information."""
 from typing import Any, Dict
 import subprocess
+import logging
+import os
+
+import rocksdb
 
 from src.requests.balances import BalanceGatherer
 import src.coder as coder
+
+LOG = logging.getLogger()
 
 
 class BalanceUpdater:
@@ -23,7 +29,7 @@ class BalanceUpdater:
         self.datapath = datapath
         self._interface = interface
         self.db = db
-        self.address_db = db.prefixed_db(b'address-')
+        # self.address_db = db.prefixed_db(b'address-')
 
     def _save_addresses(self, addresses: Dict, sort: bool) -> None:
         """
@@ -38,6 +44,7 @@ class BalanceUpdater:
             f.write(addr_str)
 
         if sort:
+            LOG.info('Removing duplicate addresses.')
             sort_cmd = 'sort -u {} -o {}'.format(self.datapath + 'addresses.txt',
                                                  self.datapath + 'addresses.txt')
             subprocess.call(sort_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -68,8 +75,8 @@ class BalanceUpdater:
                 balances = balance_gatherer._gather_balances(addresses, blockchain_height)
                 self._update_db_balances(balances)
 
-        # if os.path.exists(self.datapath + 'addresses.txt'):
-        #     os.remove(self.datapath + 'addresses.txt')
+        if os.path.exists(self.datapath + 'addresses.txt'):
+            os.remove(self.datapath + 'addresses.txt')
 
     def _update_db_balances(self, addr_balances: Dict) -> None:
         """
@@ -80,10 +87,13 @@ class BalanceUpdater:
         """
         address_objects = {}
         for address in addr_balances:
-            raw_addr = self.address_db.get(str(address).encode())
+            raw_addr = self.db.get(b'address-' + str(address).encode())
             address_objects[address] = coder.decode_address(raw_addr)
             address_objects[address]['balance'] = addr_balances[address]
-        with self.db.write_batch() as wb:
-            for address in address_objects:
-                address_value = coder.encode_address(address_objects[address])
-                wb.put(b'address-' + str(address).encode(), address_value)
+
+        wb = rocksdb.WriteBatch()
+        for address in address_objects:
+            address_value = coder.encode_address(address_objects[address])
+            wb.put(b'address-' + str(address).encode(), address_value)
+
+        self.db.write(wb)
