@@ -39,6 +39,7 @@ class BalanceUpdater:
             addresses: Addresses gathered in this batch.
             sort: Whether to sort and filter uniue addresses.
         """
+        LOG.debug('Saving addresses')
         addr_str = '\n' + '\n'.join(addresses.keys())
         with open(self.datapath + 'addresses.txt', 'a+') as f:
             f.write(addr_str)

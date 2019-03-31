@@ -15,7 +15,7 @@ import src.updater.database_updater as database_updater
 
 logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
-LOG.setLevel(logging.INFO)
+LOG.setLevel(logging.DEBUG)
 
 
 def blockchain_daemon(db_location: str, interface: str, confirmations: int,
@@ -56,7 +56,7 @@ def add_args(parser: Any) -> None:
                         help='Minimum number of comfirmations until block can included.')
     parser.add_argument('--refresh', type=int, default=20,
                         help='How many seconds to wait until the next database refresh.')
-    parser.add_argument('--bulk_size', type=int, default=10000,
+    parser.add_argument('--bulk_size', type=int, default=5000,
                         help='How many blocks should be processed at once.')
     parser.add_argument('--parse_traces', type=bool, default=False,
                         help='Whether the internal transactions should be examined as well.'
@@ -110,6 +110,7 @@ def main():
                                                                   datapath,
                                                                   args.gather_tokens,
                                                                   args.refresh, db))
+    blockchain_daemon_p.daemon = True
     blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath

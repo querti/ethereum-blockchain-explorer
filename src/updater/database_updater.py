@@ -49,8 +49,6 @@ class DatabaseUpdater:
         self.process_traces = process_traces
         self.datapath = datapath
         self.gather_tokens_arg = gather_tokens_arg
-        # self.address_db = db.prefixed_db(b'address-')
-        # self.token_db = db.prefixed_db(b'token-')
         with open(self.datapath + 'progress.txt', 'r') as f:
             data = f.read().split('\n')
             self._highest_block = int(data[0])
@@ -79,9 +77,8 @@ class DatabaseUpdater:
             else:
                 latest_block = self._highest_block + self._bulk_size
             # TODO: remove later
-            if self._highest_block + self._bulk_size > 30000:
-                break
-
+            # if self._highest_block + self._bulk_size > 30000:
+            #     break
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)
 
@@ -128,6 +125,7 @@ class DatabaseUpdater:
         Returns:
             Dictionary of new blocks.
         """
+        LOG.debug('Gathering blocks from csv')
         blocks = {}
         miners = []
         with open(self.datapath + 'blocks.csv') as csv_f:
@@ -175,6 +173,7 @@ class DatabaseUpdater:
 
         Returns: Gathered transactions and addresses.
         """
+        LOG.debug('Gathering transactions from csv')
         transactions = {}
         addresses = {}  # type: Dict[str, Any]
 
@@ -238,6 +237,7 @@ class DatabaseUpdater:
             transactions: Dictionary holding all currently proccessed transactions.
             addresses: Dictionary holding all currently processed addresses.
         """
+        LOG.debug('Gathering receipts from csv')
         with open(self.datapath + 'receipts.csv') as csv_f:
             csv_receipts = csv.DictReader(csv_f, delimiter=',')
             for row in csv_receipts:
@@ -348,6 +348,7 @@ class DatabaseUpdater:
         Returns:
             Addresses with new information.
         """
+        LOG.debug('Filling addresses.')
         addresses = self.init_fill_addrs_token_data(addresses, token_txs)
         addresses_encode = {}
         for addr_hash, addr_dict in addresses.items():
@@ -519,6 +520,7 @@ class DatabaseUpdater:
             addresses: Dictionary containing addresses.
             tokens: Dictionary containing tokens.
         """
+        LOG.debug('Writing to database.')
         wb = rocksdb.WriteBatch()
         for block_hash, block_dict in blocks.items():
             if 'transactionIndexRange' not in block_dict:
@@ -575,7 +577,7 @@ def update_database(db_location: str,
         fell_behind = db_updater.fill_database()
         LOG.info('Database update has been completed.')
         # TODO: for testing purposes
-        fell_behind = False
+        # fell_behind = False
         # If during sync the updater didn't fall too far behind, consider sync finished
         if not fell_behind:
             break
