@@ -368,7 +368,7 @@ class DatabaseUpdater:
             if addr_hash in tokens:
                 if tokens[addr_hash]['type'] == 'ERC-20':
                     address_encode['tokenContract'] = 'ERC-20'
-                elif tokens[addr_hash['type']] == 'ERC-721':
+                elif tokens[addr_hash]['type'] == 'ERC-721':
                     address_encode['tokenContract'] = 'ERC-721'
             else:
                 address_encode['tokenContract'] = 'False'
