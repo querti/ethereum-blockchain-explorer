@@ -6,6 +6,7 @@ import logging
 import src.coder as coder
 
 LOG = logging.getLogger()
+LOG.setLevel(logging.INFO)
 
 
 class DatabaseGatherer:

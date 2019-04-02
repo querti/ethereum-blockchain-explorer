@@ -15,7 +15,7 @@ import src.updater.database_updater as database_updater
 
 logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
-LOG.setLevel(logging.DEBUG)
+LOG.setLevel(logging.INFO)
 
 
 def blockchain_daemon(db_location: str, interface: str, confirmations: int,
@@ -89,7 +89,8 @@ def main():
     parser = argparse.ArgumentParser()
     add_args(parser)
     args = parser.parse_args()
-
+    print(args.bulk_size)
+    return
     db_lock = Lock()
     datapath = args.datapath
     db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))

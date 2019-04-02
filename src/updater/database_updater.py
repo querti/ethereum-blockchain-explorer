@@ -3,6 +3,7 @@
 from typing import Any, Tuple, List, Dict
 import logging
 import csv
+import time
 
 import rocksdb
 
@@ -91,7 +92,7 @@ class DatabaseUpdater:
             if self.process_traces:
                 addresses = self.add_trace_addresses(addresses, self._highest_block, latest_block)
             # every 10th batch, save addresses to file and remove duplicates
-            if batch_index % 10 == 0:
+            if batch_index % 5 == 0:
                 self.balance_updater._save_addresses(addresses, True)
             else:
                 self.balance_updater._save_addresses(addresses, False)
@@ -105,6 +106,8 @@ class DatabaseUpdater:
                 break
             percentage = (self._highest_block / last_block) * 100
             LOG.info('Blockchain syncing: {:.2f}% done.'.format(percentage))
+            time.sleep(2)
+
 
         # Update balances of all addresses
         self.balance_updater._save_addresses({}, True)
@@ -125,7 +128,7 @@ class DatabaseUpdater:
         Returns:
             Dictionary of new blocks.
         """
-        LOG.debug('Gathering blocks from csv')
+        LOG.info('Gathering blocks from csv')
         blocks = {}
         miners = []
         with open(self.datapath + 'blocks.csv') as csv_f:
@@ -173,7 +176,7 @@ class DatabaseUpdater:
 
         Returns: Gathered transactions and addresses.
         """
-        LOG.debug('Gathering transactions from csv')
+        LOG.info('Gathering transactions from csv')
         transactions = {}
         addresses = {}  # type: Dict[str, Any]
 
@@ -237,7 +240,7 @@ class DatabaseUpdater:
             transactions: Dictionary holding all currently proccessed transactions.
             addresses: Dictionary holding all currently processed addresses.
         """
-        LOG.debug('Gathering receipts from csv')
+        LOG.info('Gathering receipts from csv')
         with open(self.datapath + 'receipts.csv') as csv_f:
             csv_receipts = csv.DictReader(csv_f, delimiter=',')
             for row in csv_receipts:
@@ -348,10 +351,17 @@ class DatabaseUpdater:
         Returns:
             Addresses with new information.
         """
-        LOG.debug('Filling addresses.')
+        LOG.info('Filling addresses.')
         addresses = self.init_fill_addrs_token_data(addresses, token_txs)
         addresses_encode = {}
+        it = 0
+        items = []
         for addr_hash, addr_dict in addresses.items():
+            progress = int(it/len(addresses)*100)
+            if progress % 20 == 0 and progress not in items:
+                LOG.info('Address filling progress: {}%'.format(progress))
+                items.append(progress)
+            it += 1
             existing_data = self.db.get(b'address-' + addr_hash.encode())
             # Address not yet in records
             if existing_data is not None:
@@ -520,7 +530,7 @@ class DatabaseUpdater:
             addresses: Dictionary containing addresses.
             tokens: Dictionary containing tokens.
         """
-        LOG.debug('Writing to database.')
+        LOG.info('Writing to database.')
         wb = rocksdb.WriteBatch()
         for block_hash, block_dict in blocks.items():
             if 'transactionIndexRange' not in block_dict:

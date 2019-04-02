@@ -31,7 +31,7 @@ class DataRetriever:
             first_block: First block to be included.
             last_block: Last block to be included.
         """
-        LOG.debug('Getting blocks from blockchain')
+        LOG.info('Getting blocks from blockchain')
         # Get blocks and their transactions
         block_tx_cmd = "ethereumetl export_blocks_and_transactions --start-block {} " \
                        "--end-block {} --provider-uri {} --blocks-output {} " \
@@ -41,14 +41,14 @@ class DataRetriever:
                                                          self.datapath + 'transactions.csv')
         subprocess.call(block_tx_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        LOG.debug('Getting transactions from blockchain')
+        LOG.info('Getting transactions from blockchain')
         # Get transaction hashes
         tx_hash_cmd = "ethereumetl extract_csv_column --input {} --column hash " \
                       "--output {}".format(self.datapath + 'transactions.csv',
                                            self.datapath + 'tx_hashes.txt')
         subprocess.call(tx_hash_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        LOG.debug('Getting receipts from blockchain')
+        LOG.info('Getting receipts from blockchain')
         # Get receipts
         tx_receipts_cmd = "ethereumetl export_receipts_and_logs --transaction-hashes {} " \
                           " --provider-uri {} --receipts-output {} " \
@@ -70,7 +70,7 @@ class DataRetriever:
             first_block: First block to be included.
             last_block: Last block to be included.
         """
-        LOG.debug('Getting contract addresses from blockchain')
+        LOG.info('Getting contract addresses from blockchain')
         # get contract addresses
         contracts_addr_cmd = "ethereumetl extract_csv_column --input {} " \
                              " --column contract_address " \
@@ -79,7 +79,7 @@ class DataRetriever:
         subprocess.call(contracts_addr_cmd.split(),
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        LOG.debug('Getting contracts from blockchain')
+        LOG.info('Getting contracts from blockchain')
         # get contracts
         # This is a bottleneck basically
         contracts_cmd = "ethereumetl export_contracts --contract-addresses {} " \
@@ -100,7 +100,7 @@ class DataRetriever:
             with open(self.datapath + 'token_addresses.txt', 'w') as f:
                 f.write('\n'.join(data))
         
-        LOG.debug('Getting tokens from blockchain')
+        LOG.info('Getting tokens from blockchain')
         # get Tokens
         tokens_cmd = "ethereumetl export_tokens --token-addresses {} " \
                      " --provider-uri {} " \
@@ -108,7 +108,7 @@ class DataRetriever:
                                            self.datapath + 'tokens.csv')
         subprocess.call(tokens_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        LOG.debug('Getting token transfers from blockchain')
+        LOG.info('Getting token transfers from blockchain')
         token_tx_cmd = "ethereumetl extract_token_transfers --logs {} " \
                        "--output {}".format(self.datapath + 'logs.csv',
                                             self.datapath + 'token_transfers.csv')
