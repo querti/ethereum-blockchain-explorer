@@ -67,7 +67,7 @@ pysha3==1.0.2
 python-dateutil==2.7.0
 python-rocksdb==0.7.0
 pytz==2018.9
-PyYAML==3.13
+pyyaml>=4.2b1
 repoze.lru==0.7
 requests==2.21.0
 rlp==1.1.0
@@ -87,5 +87,4 @@ virtualenv==16.3.0
 web3==4.7.2
 websockets==6.0
 Werkzeug==0.14.1
-z3-solver-mythril==4.8.4.1
 zope.interface==4.6.0
