@@ -78,8 +78,8 @@ class DatabaseUpdater:
             else:
                 latest_block = self._highest_block + self._bulk_size
             # TODO: remove later
-            # if self._highest_block + self._bulk_size > 30000:
-            #     break
+            if self._highest_block + self._bulk_size > 50000:
+                break
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)
 

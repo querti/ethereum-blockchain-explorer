@@ -10,7 +10,7 @@ services:
     command:
       -printtoconsole
     ports:
-      - 10001:10001
+      - 5000:5000
     volumes:
       - /media/querti/Windows8_OS/Downloads/ethereum:/home/ethereum
       - /home/querti/Documents/db:/home/db

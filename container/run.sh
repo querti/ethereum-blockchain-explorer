@@ -1,9 +1,9 @@
 #!/bin/bash
 SIZE=5000
-sleep 50000000
+cd /home/ethereum-blockchain-explorer
 while true
 do
-    python3 main.py --interface /media/querti/Windows8_OS/Downloads/ethereum/geth.ipc --dbpath /media/querti/Maxtor/database/ --gather_tokens True --bulk_size $SIZE
+    python3 main.py --interface /home/ethereum/geth.ipc --dbpath /home/db --gather_tokens True --bulk_size $SIZE
     if [ "$?" == 1 ]
     then
         SIZE=$(( SIZE / 2 ))
