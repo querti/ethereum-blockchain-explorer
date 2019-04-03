@@ -587,7 +587,7 @@ def update_database(db_location: str,
         fell_behind = db_updater.fill_database()
         LOG.info('Database update has been completed.')
         # TODO: for testing purposes
-        # fell_behind = False
+        fell_behind = False
         # If during sync the updater didn't fall too far behind, consider sync finished
         if not fell_behind:
             break
