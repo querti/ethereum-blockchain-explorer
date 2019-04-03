@@ -1,0 +1,16 @@
+version: '3.3'
+services:
+  ebe:
+    build:
+      context: ./container
+      dockerfile: Dockerfile
+    image: ethereum-explorer
+    container_name: ethereum-explorer
+    restart: always
+    command:
+      -printtoconsole
+    ports:
+      - 10001:10001
+    volumes:
+      - /media/querti/Windows8_OS/Downloads/ethereum:/home/ethereum
+      - /home/querti/Documents/db:/home/db
