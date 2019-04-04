@@ -104,7 +104,7 @@ def main():
         block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
         block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
 
-    db = rocksdb.DB('/media/querti/Windows8_OS/Downloads/database', opts)
+    db = rocksdb.DB('/home/db', opts)
     opts2 = rocksdb.Options()
     opts2.create_if_missing = True
     opts2.max_open_files = 300000
@@ -117,7 +117,7 @@ def main():
         block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
         block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
 
-    read_db = rocksdb.DB('/media/querti/Windows8_OS/Downloads/database', opts2, read_only=True)
+    read_db = rocksdb.DB('/home/db', opts2, read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
