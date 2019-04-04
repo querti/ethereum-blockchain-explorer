@@ -5,6 +5,7 @@ from time import sleep
 from multiprocessing import Process, Lock
 import argparse
 import os
+import copy
 
 import connexion
 import rocksdb
@@ -102,7 +103,7 @@ def main():
         filter_policy=rocksdb.BloomFilterPolicy(10),
         block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
         block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
-    opts2 = deepcopy(opts)
+    opts2 = copy.deepcopy(opts)
 
     db = rocksdb.DB(args.dbpath, opts)
     read_db = rocksdb.DB(args.dbpath, opts2, read_only=True)
