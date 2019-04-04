@@ -39,6 +39,7 @@ class DataRetriever:
                                                          self._interface,
                                                          self.datapath + 'blocks.csv',
                                                          self.datapath + 'transactions.csv')
+        print(block_tx_cmd)
         subprocess.call(block_tx_cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         LOG.info('Getting transactions from blockchain')
