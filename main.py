@@ -91,8 +91,21 @@ def main():
     args = parser.parse_args()
     db_lock = Lock()
     datapath = args.datapath
-    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
-    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True), read_only=True)
+    opts = rocksdb.Options()
+    opts.create_if_missing = True
+    opts.max_open_files = 300000
+    opts.write_buffer_size = 67108864
+    opts.max_write_buffer_number = 3
+    opts.target_file_size_base = 67108864
+
+    opts.table_factory = rocksdb.BlockBasedTableFactory(
+        filter_policy=rocksdb.BloomFilterPolicy(10),
+        block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
+        block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
+    opts2 = deepcopy(opts)
+
+    db = rocksdb.DB(args.dbpath, opts)
+    read_db = rocksdb.DB(args.dbpath, opts2, read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
