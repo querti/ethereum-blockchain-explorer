@@ -303,8 +303,11 @@ class DatabaseGatherer:
 
         input_transactions = []
         output_transactions = []
+        tx_counter = 0
 
         for transaction in address['inputTransactions'].split('|'):
+            if tx_counter > no_tx_list:
+                break
             if transaction == '':
                 break
             tx_hash, timestamp, value = transaction.split('+')
@@ -312,8 +315,12 @@ class DatabaseGatherer:
                     and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
                 input_transactions.append(coder.decode_transaction(raw_tx))
+                tx_counter += 1
+
 
         for transaction in address['outputTransactions'].split('|'):
+            if tx_counter > no_tx_list:
+                break
             if transaction == '':
                 break
             tx_hash, timestamp, value = transaction.split('+')
@@ -321,6 +328,7 @@ class DatabaseGatherer:
                     and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
                 output_transactions.append(coder.decode_transaction(raw_tx))
+                tx_counter += 1
 
         address['mined'] = address['mined'].split('|')
         if address['mined'] == ['']:
@@ -329,18 +337,18 @@ class DatabaseGatherer:
         del address['inputTransactions']
         del address['outputTransactions']
 
-        all_transactions = input_transactions + output_transactions
-        all_transactions = sorted(all_transactions, key=lambda k: int(k['timestamp']))
+        # all_transactions = input_transactions + output_transactions
+        # all_transactions = sorted(all_transactions, key=lambda k: int(k['timestamp']))
 
-        address['inputTransactions'] = []
-        address['outputTransactions'] = []
-        iteration = no_tx_list if no_tx_list < len(all_transactions) else len(all_transactions)
+        address['inputTransactions'] = input_transactions
+        address['outputTransactions'] = output_transactions
+        # iteration = no_tx_list if no_tx_list < len(all_transactions) else len(all_transactions)
 
-        for i in range(iteration):
-            if all_transactions[i] in input_transactions:
-                address['inputTransactions'].append(all_transactions[i])
-            if all_transactions[i] in output_transactions:
-                address['outputTransactions'].append(all_transactions[i])
+        # for i in range(iteration):
+        #     if all_transactions[i] in input_transactions:
+        #         address['inputTransactions'].append(all_transactions[i])
+        #     if all_transactions[i] in output_transactions:
+        #         address['outputTransactions'].append(all_transactions[i])
 
         input_token_txs = address['inputTokenTransactions'].split('|')
         address['inputTokenTransactions'] = []
