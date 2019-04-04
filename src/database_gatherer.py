@@ -296,22 +296,31 @@ class DatabaseGatherer:
         Returns:
             Address information along with its transactions.
         """
+        print('addr: {}, time_from: {}, time_to: {}, val_from: {}, val_to: {}, no_tx_list: {}'.format(addr, time_from, time_to, val_from, val_to, no_tx_list))
         raw_address = self.db.get(b'address-' + addr.encode())
         if raw_address is None:
+            print('fuck')
             return None
         address = coder.decode_address(raw_address)
 
         input_transactions = []
         output_transactions = []
+        i = 0
+        size = len(address['inputTransactions'].split('|'))
 
         for transaction in address['inputTransactions'].split('|'):
             if transaction == '':
                 break
+            
+            if i % 1000 == 0:
+                print('prog: {}%'.format((i/size)*100))
+            i += 1
             tx_hash, timestamp, value = transaction.split('+')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
+                #print('r:{}'.format(tx_hash.encode()))
                 raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-                input_transactions.append(coder.decode_transaction(raw_tx))
+                input_transactions.append(raw_tx)
 
         for transaction in address['outputTransactions'].split('|'):
             if transaction == '':
@@ -332,19 +341,21 @@ class DatabaseGatherer:
         all_transactions = input_transactions + output_transactions
         all_transactions = sorted(all_transactions, key=lambda k: int(k['timestamp']))
 
-        address['inputTransactions'] = []
-        address['outputTransactions'] = []
-        iteration = no_tx_list if no_tx_list < len(all_transactions) else len(all_transactions)
-
-        for i in range(iteration):
-            if all_transactions[i] in input_transactions:
-                address['inputTransactions'].append(all_transactions[i])
-            if all_transactions[i] in output_transactions:
-                address['outputTransactions'].append(all_transactions[i])
-
+        address['inputTransactions'] = input_transactions
+        address['outputTransactions'] = output_transactions
+        #iteration = no_tx_list if no_tx_list < len(all_transactions) else len(all_transactions)
+        # print('start1')
+        # for i in range(iteration):
+        #     if all_transactions[i] in input_transactions:
+        #         address['inputTransactions'].append(all_transactions[i])
+        #     if all_transactions[i] in output_transactions:
+        #         address['outputTransactions'].append(all_transactions[i])
+        # print('end1')
         input_token_txs = address['inputTokenTransactions'].split('|')
         address['inputTokenTransactions'] = []
+        print('start2')
         for input_token_tx in input_token_txs:
+            print('lel')
             if input_token_tx == '':
                 break
             contract_addr, addr_from, value, tx_hash, timestamp = input_token_tx.split('+')
@@ -353,7 +364,7 @@ class DatabaseGatherer:
                                                       'value': value,
                                                       'transaction_hash': tx_hash,
                                                       'timestamp': timestamp})
-
+        print('end2')
         output_token_txs = address['outputTokenTransactions'].split('|')
         address['outputTokenTransactions'] = []
         for output_token_tx in output_token_txs:

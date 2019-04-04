@@ -12,6 +12,7 @@ from typing import Any
 import logging
 
 import src.updater.database_updater as database_updater
+from src.database_gatherer import DatabaseGatherer
 
 logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
@@ -91,11 +92,38 @@ def main():
     args = parser.parse_args()
     db_lock = Lock()
     datapath = args.datapath
-    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
-    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True), read_only=True)
+    opts = rocksdb.Options()
+    opts.create_if_missing = True
+    opts.max_open_files = 300000
+    opts.write_buffer_size = 67108864
+    opts.max_write_buffer_number = 3
+    opts.target_file_size_base = 67108864
+
+    opts.table_factory = rocksdb.BlockBasedTableFactory(
+        filter_policy=rocksdb.BloomFilterPolicy(10),
+        block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
+        block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
+
+    db = rocksdb.DB('/media/querti/Windows8_OS/Downloads/database', opts)
+    opts2 = rocksdb.Options()
+    opts2.create_if_missing = True
+    opts2.max_open_files = 300000
+    opts2.write_buffer_size = 67108864
+    opts2.max_write_buffer_number = 3
+    opts2.target_file_size_base = 67108864
+
+    opts2.table_factory = rocksdb.BlockBasedTableFactory(
+        filter_policy=rocksdb.BloomFilterPolicy(10),
+        block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
+        block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
+
+    read_db = rocksdb.DB('/media/querti/Windows8_OS/Downloads/database', opts2, read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
+    gatherer = DatabaseGatherer(read_db)
+    res = gatherer.get_address('0x70c9217d814985faef62b124420f8dfbddd96433', 0, 1555313024, 0, 10000000000000000000000000000000, 1000000000000000000000000000000)
+    return
     # Before API interface is started, database is created/updated.
     database_updater.update_database(args.dbpath, args.interface,
                                      args.confirmations, args.bulk_size,
@@ -111,7 +139,7 @@ def main():
                                                                   args.refresh, db))
     blockchain_daemon_p.daemon = True
     blockchain_daemon_p.start()
-    app = connexion.App(__name__, specification_dir='cfg/')
+    app = connexion.App(__name__, specification_dir='/home/querti/Documents/ethereum-blockchain-explorer/cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
     app.app.config['DB_LOCK'] = db_lock
     app.app.config['DB'] = read_db
