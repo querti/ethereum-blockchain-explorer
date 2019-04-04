@@ -14,6 +14,7 @@ ENV LC_ALL en_US.UTF-8
 RUN cd /home &&\
     git clone https://github.com/querti/ethereum-blockchain-explorer.git &&\
     cd /home/ethereum-blockchain-explorer &&\
+    git checkout cursed-branch &&\
     pip3 install -r requirements.txt
 
 ADD run.sh /root/run.sh
