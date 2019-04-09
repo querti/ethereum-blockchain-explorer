@@ -1,5 +1,5 @@
 #!/bin/bash
-SIZE=5000
+SIZE=10000
 cd /home/ethereum-blockchain-explorer
 while true
 do
@@ -12,7 +12,7 @@ do
     
     if [ "$SIZE" == 0 ]
     then
-        echo "Fatal error"
+        echo "Fatal error" >> /home/data/errlog
         break
     fi
 done

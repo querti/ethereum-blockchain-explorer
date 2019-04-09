@@ -14,3 +14,4 @@ services:
     volumes:
       - /media/querti/Windows8_OS/Downloads/ethereum:/home/ethereum
       - /home/querti/Documents/db:/home/db
+      - /home/data:/home/data
