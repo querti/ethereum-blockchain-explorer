@@ -17,6 +17,8 @@ import src.updater.database_updater as database_updater
 logging.basicConfig(stream=sys.stdout, format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stdout)
+LOG.addHandler(handler)
 
 
 def blockchain_daemon(db_location: str, interface: str, confirmations: int,
