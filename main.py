@@ -6,6 +6,7 @@ from multiprocessing import Process, Lock
 import argparse
 import os
 import copy
+import sys
 
 import connexion
 import rocksdb
