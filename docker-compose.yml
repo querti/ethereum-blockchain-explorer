@@ -12,6 +12,6 @@ services:
     ports:
       - 5000:5000
     volumes:
-      - /media/querti/Windows8_OS/Downloads/ethereum:/home/ethereum
-      - /home/querti/Documents/db:/home/db
-      - /home/data:/home/data
+      - /home/lgallovi/Documents/ethereum:/home/ethereum
+      - /home/lgallovi/Documents/database:/home/db
+      - /home/lgallovi/Documents/data:/home/data

@@ -16,6 +16,7 @@ import src.updater.database_updater as database_updater
 
 logging.basicConfig(format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
+logging.basicConfig(stream=sys.stdout)
 LOG.setLevel(logging.INFO)
 
 
