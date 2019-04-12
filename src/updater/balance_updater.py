@@ -99,9 +99,14 @@ class BalanceUpdater:
             address_objects[address] = coder.decode_address(raw_addr)
             address_objects[address]['balance'] = addr_balances[address]
 
-        #wb = rocksdb.WriteBatch()
+        wb = rocksdb.WriteBatch()
         for address in address_objects:
             address_value = coder.encode_address(address_objects[address])
-            self.db.put(b'address-' + str(address).encode(), address_value)
+            wb.put(b'address-' + str(address).encode(), address_value)
+            counter += 1
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
 
-        #self.db.write(wb)
+        self.db.write(wb)

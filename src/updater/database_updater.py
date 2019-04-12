@@ -532,31 +532,61 @@ class DatabaseUpdater:
         """
         LOG.info('Writing to database.')
         #wb = rocksdb.WriteBatch()
+        wb = rocksdb.WriteBatch()
+        counter = 0
         for block_hash, block_dict in blocks.items():
             if 'transactionIndexRange' not in block_dict:
                 block_dict['transactionIndexRange'] = ''
             block_value = coder.encode_block(block_dict)
-            self.db.put(b'block-' + str(block_dict['number']).encode(), block_value)
-            self.db.put(b'hash-block-' + str(block_dict['hash']).encode(),
+            wb.put(b'block-' + str(block_dict['number']).encode(), block_value)
+            wb.put(b'hash-block-' + str(block_dict['hash']).encode(),
                    str(block_dict['number']).encode())
-            self.db.put(b'timestamp-block-' + str(block_dict['timestamp']).encode(),
+            wb.put(b'timestamp-block-' + str(block_dict['timestamp']).encode(),
                    str(block_dict['number']).encode())
+            counter += 3
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
 
+        self.db.write(wb)
+        wb = rocksdb.WriteBatch()
+        counter = 0
         for tx_hash, tx_dict in transactions.items():
             if 'logs' not in tx_dict:
                 tx_dict['logs'] = ''
             tx_value = coder.encode_transaction(tx_dict)
-            self.db.put(b'transaction-' + tx_hash.encode(), tx_value)
+            wb.put(b'transaction-' + tx_hash.encode(), tx_value)
+            counter +=1
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
 
+        self.db.write(wb)
+        wb = rocksdb.WriteBatch()
+        counter = 0
         for addr_hash, addr_dict in addresses.items():
             address_value = coder.encode_address(addr_dict)
-            self.db.put(b'address-' + str(addr_hash).encode(), address_value)
+            wb.put(b'address-' + str(addr_hash).encode(), address_value)
+            counter += 1
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
 
+        self.db.write(wb)
+        wb = rocksdb.WriteBatch()
+        counter = 0
         for addr_hash, token_dict in tokens.items():
             token_value = coder.encode_token(token_dict)
-            self.db.put(b'token-' + str(addr_hash).encode(), token_value)
-
-        #self.db.write(wb)
+            wb.put(b'token-' + str(addr_hash).encode(), token_value)
+            counter += 1
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
+        self.db.write(wb)
 
 
 def update_database(db_location: str,
