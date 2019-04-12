@@ -95,9 +95,9 @@ def main():
     datapath = args.datapath
     opts = rocksdb.Options()
     opts.create_if_missing = True
-    opts.max_open_files = 300000
-    opts.write_buffer_size = 67108864
-    opts.max_write_buffer_number = 3
+    opts.max_open_files = 5000
+    opts.write_buffer_size = 1024*1024
+    opts.max_write_buffer_number = 2
     opts.target_file_size_base = 67108864
 
     opts.table_factory = rocksdb.BlockBasedTableFactory(
