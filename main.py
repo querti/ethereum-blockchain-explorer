@@ -119,8 +119,8 @@ def main():
         block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
         block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
 
-    db = rocksdb.DB(args.dbpath, opts)
-    read_db = rocksdb.DB(args.dbpath, opts2, read_only=True)
+    db = rocksdb.DB(args.dbpath)
+    read_db = rocksdb.DB(args.dbpath, read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
