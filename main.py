@@ -18,8 +18,6 @@ import src.updater.database_updater as database_updater
 logging.basicConfig(stream=sys.stdout, format=('%(asctime)s - %(levelname)s - %(message)s'))
 LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-LOG.addHandler(handler)
 
 
 def blockchain_daemon(db_location: str, interface: str, confirmations: int,
@@ -119,8 +117,8 @@ def main():
         block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
         block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
 
-    db = rocksdb.DB(args.dbpath)
-    read_db = rocksdb.DB(args.dbpath, read_only=True)
+    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
+    read_db = rocksdb.DB(args.dbpath,rocksdb.Options(create_if_missing=True), read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
