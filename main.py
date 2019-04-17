@@ -105,8 +105,8 @@ def main():
     opts2.write_buffer_size = 1024*1024
     opts2.max_write_buffer_number = 2
 
-    db = rocksdb.DB(args.dbpath, opts)
-    read_db = rocksdb.DB(args.dbpath, opts2, read_only=True)
+    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
+    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True), read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
