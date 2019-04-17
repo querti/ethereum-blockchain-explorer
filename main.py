@@ -98,27 +98,15 @@ def main():
     opts.max_open_files = 5000
     opts.write_buffer_size = 1024*1024
     opts.max_write_buffer_number = 2
-    opts.target_file_size_base = 67108864
-
-    opts.table_factory = rocksdb.BlockBasedTableFactory(
-        filter_policy=rocksdb.BloomFilterPolicy(10),
-        block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
-        block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
     
     opts2 = rocksdb.Options()
     opts2.create_if_missing = True
-    opts2.max_open_files = 300000
-    opts2.write_buffer_size = 67108864
-    opts2.max_write_buffer_number = 3
-    opts2.target_file_size_base = 67108864
-
-    opts2.table_factory = rocksdb.BlockBasedTableFactory(
-        filter_policy=rocksdb.BloomFilterPolicy(10),
-        block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
-        block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2)))
+    opts2.max_open_files = 5000
+    opts2.write_buffer_size = 1024*1024
+    opts2.max_write_buffer_number = 2
 
     db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
-    read_db = rocksdb.DB(args.dbpath,rocksdb.Options(create_if_missing=True), read_only=True)
+    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True), read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
