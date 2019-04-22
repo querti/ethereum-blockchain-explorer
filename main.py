@@ -105,26 +105,26 @@ def main():
     opts2.write_buffer_size = 1024*1024
     opts2.max_write_buffer_number = 2
 
-    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
-    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True), read_only=True)
+    #db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True, max_open_files = 5000))
+    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True, max_open_files = 5000), read_only=True)
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
     # Before API interface is started, database is created/updated.
-    database_updater.update_database(args.dbpath, args.interface,
-                                     args.confirmations, args.bulk_size,
-                                     args.parse_traces, datapath, args.gather_tokens, db)
+    # database_updater.update_database(args.dbpath, args.interface,
+    #                                  args.confirmations, args.bulk_size,
+    #                                  args.parse_traces, datapath, args.gather_tokens, db)
 
-    blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
-                                                                  args.interface,
-                                                                  args.confirmations,
-                                                                  args.bulk_size,
-                                                                  args.parse_traces,
-                                                                  datapath,
-                                                                  args.gather_tokens,
-                                                                  args.refresh, db))
-    blockchain_daemon_p.daemon = True
-    blockchain_daemon_p.start()
+    # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
+    #                                                               args.interface,
+    #                                                               args.confirmations,
+    #                                                               args.bulk_size,
+    #                                                               args.parse_traces,
+    #                                                               datapath,
+    #                                                               args.gather_tokens,
+    #                                                               args.refresh, db))
+    # blockchain_daemon_p.daemon = True
+    # blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
     app.app.config['DB_LOCK'] = db_lock
