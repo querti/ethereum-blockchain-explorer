@@ -12,6 +12,9 @@ from src.blockchain_wrapper import BlockchainWrapper
 from src.requests.traces import TraceAddressGatherer
 from src.updater.data_retriever import DataRetriever
 from src.updater.balance_updater import BalanceUpdater
+from src.requests.blocks_transactions import BlocksTransactionsGatherer
+from src.requests.receipts import ReceiptsGatherer
+from src.requests.tokens import TokensGatherer
 
 LOG = logging.getLogger()
 
@@ -63,6 +66,9 @@ class DatabaseUpdater:
         self.retriever = DataRetriever(self._interface, self.datapath, self.gather_tokens_arg)
         self.balance_updater = BalanceUpdater(self._bulk_size, self.datapath,
                                               self._interface, self.db)
+        self.blocks_gatherer = BlocksTransactionsGatherer(self._interface)
+        self.receipts_gatherer = ReceiptsGatherer(self._interface)
+        self.tokens_gatherer = TokensGatherer(self._interface)
 
     def fill_database(self) -> bool:
         """Adds new entries to the database."""
@@ -81,12 +87,12 @@ class DatabaseUpdater:
             #if self._highest_block + self._bulk_size > 50000:
             #    break
             # Get data from Node
-            self.retriever.create_csv_files(self._highest_block, latest_block)
+            # self.retriever.create_csv_files(self._highest_block, latest_block)
 
             # Parse the data
-            blocks, transactions, addresses = self.gather_blocks()
+            blocks, transactions, addresses, contract_addresses, logs = self.gather_blocks(self._highest_block, latest_block)
             if self.gather_tokens_arg:
-                tokens, token_txs = self.gather_tokens(transactions)
+                tokens, token_txs = self.gather_tokens(transactions, contract_addresses, logs)
             else:
                 tokens, token_txs = ({}, [])
             if self.process_traces:
@@ -121,7 +127,7 @@ class DatabaseUpdater:
 
         LOG.info('Bulk database update complete.')
 
-    def gather_blocks(self) -> Tuple[Dict, Dict, Dict]:
+    def gather_blocks(self, first_block: int, last_block: int) -> Tuple[Dict, Dict, Dict]:
         """
         Create dictionary representation of processed blocks.
 
@@ -131,29 +137,32 @@ class DatabaseUpdater:
         LOG.info('Gathering blocks from csv')
         blocks = {}
         miners = []
-        with open(self.datapath + 'blocks.csv') as csv_f:
-            csv_blocks = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_blocks:
-                block = {}
-                block['number'] = row['number']
-                block['hash'] = row['hash']
-                block['parentHash'] = row['parent_hash']
-                block['nonce'] = row['nonce']
-                block['logsBloom'] = row['logs_bloom']
-                block['miner'] = row['miner']
-                block['difficulty'] = row['difficulty']
-                block['totalDifficulty'] = row['total_difficulty']
-                block['extraData'] = row['extra_data']
-                block['size'] = row['size']
-                block['gasLimit'] = row['gas_limit']
-                block['gasUsed'] = row['gas_used']
-                block['timestamp'] = row['timestamp']
-                block['sha3Uncles'] = row['sha3_uncles']
-                block['transactions'] = ''
-                blocks[block['hash']] = block
-                miners.append((block['miner'], block['hash']))
+        contract_addresses = []
+        logs = []
+        raw_blocks, raw_transactions = self.blocks_gatherer.gather_blocks_and_transactions(first_block, last_block)
+        for raw_block_hash, raw_block in raw_blocks.items():
+            block = {}
+            block['difficulty'] = str(int(raw_block['difficulty'], 16))
+            block['extraData'] = raw_block['extraData']
+            block['gasLimit'] = str(int(raw_block['gasLimit'], 16))
+            block['gasUsed'] = str(int(raw_block['gasUsed'], 16))
+            block['hash'] = raw_block['hash']
+            block['logsBloom'] = raw_block['logsBloom']
+            block['miner'] = raw_block['miner']
+            block['nonce'] = str(int(raw_block['nonce'], 16))
+            block['number'] = str(int(raw_block['number'], 16))
+            block['parentHash'] = raw_block['parentHash']
+            block['sha3Uncles'] = raw_block['sha3Uncles']
+            block['size'] = str(int(raw_block['size'], 16))
+            block['timestamp'] = str(int(raw_block['timestamp'], 16))
+            block['totalDifficulty'] = str(int(raw_block['totalDifficulty'], 16))
+            block['transactions'] = ''
+            blocks[raw_block_hash] = block
+            miners.append((block['miner'], raw_block_hash))
 
-        transactions, addresses = self.gather_transactions(blocks)
+        transactions, addresses, block_contract_addresses, block_logs = self.gather_transactions(raw_transactions, blocks)
+        contract_addresses += block_contract_addresses
+        logs += block_logs
         for miner in miners:
             if miner[0] not in addresses and miner[0] is not None:
                 addresses[miner[0]] = {'inputTransactionHashes': [],
@@ -165,9 +174,9 @@ class DatabaseUpdater:
             elif miner[0] is not None:
                 addresses[miner[0]]['mined'].append(miner[1])
 
-        return (blocks, transactions, addresses)
+        return (blocks, transactions, addresses, contract_addresses, logs)
 
-    def gather_transactions(self, blocks: Dict) -> Tuple[Dict, Dict]:
+    def gather_transactions(self, raw_transactions: Dict, blocks: Dict) -> Tuple[Dict, Dict]:
         """
         Gathers transactions and adds their hashes to blocks, as well as to addresses.
 
@@ -179,58 +188,54 @@ class DatabaseUpdater:
         LOG.info('Gathering transactions from csv')
         transactions = {}
         addresses = {}  # type: Dict[str, Any]
+        for tx_hash, raw_tx in raw_transactions.items():
+            transaction = {}
+            transaction['blockHash'] = raw_tx['blockHash']
+            transaction['blockNumber'] = str(int(raw_tx['blockNumber'], 16))
+            transaction['from'] = raw_tx['from']
+            transaction['gas'] = str(int(raw_tx['gas'], 16))
+            transaction['gasPrice'] = str(int(raw_tx['gasPrice'], 16))
+            transaction['hash'] = raw_tx['hash']
+            transaction['input'] = raw_tx['input']
+            transaction['nonce'] = raw_tx['nonce']
+            transaction['to'] = raw_tx['to']
+            transaction['value'] = str(int(raw_tx['value'], 16))
+            transaction['timestamp'] = blocks[transaction['blockHash']]['timestamp']
 
-        with open(self.datapath + 'transactions.csv') as csv_f:
-            csv_transactions = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_transactions:
-                transaction = {}
-                transaction['blockHash'] = row['block_hash']
-                transaction['blockNumber'] = row['block_number']
-                transaction['from'] = row['from_address']
-                transaction['to'] = row['to_address']
-                transaction['gas'] = row['gas']
-                transaction['gasPrice'] = row['gas_price']
-                transaction['hash'] = row['hash']
-                transaction['input'] = row['input']
-                transaction['nonce'] = row['nonce']
-                transaction['value'] = row['value']
-                transaction['timestamp'] = blocks[row['block_hash']]['timestamp']
-                # transaction['index'] = str(current_highest_tx)
-
-                if transaction['from'] not in addresses and transaction['from'] is not None:
-                    addresses[transaction['from']] = {'inputTransactionHashes':
-                                                      [transaction['hash']],
-                                                      'outputTransactionHashes': [],
-                                                      'code': '0x',
-                                                      'mined': [],
-                                                      'inputTokenTransactions': [],
-                                                      'outputTokenTransactions': []}
-                elif transaction['from'] is not None:
-                    addresses[transaction['from']]['inputTransactionHashes'].append(
-                        transaction['hash'])
-
-                if transaction['to'] not in addresses and transaction['to'] is not None:
-                    addresses[transaction['to']] = {'inputTransactionHashes': [],
-                                                    'outputTransactionHashes':
+            if transaction['from'] not in addresses and transaction['from'] is not None:
+                addresses[transaction['from']] = {'inputTransactionHashes':
                                                     [transaction['hash']],
+                                                    'outputTransactionHashes': [],
                                                     'code': '0x',
                                                     'mined': [],
                                                     'inputTokenTransactions': [],
                                                     'outputTokenTransactions': []}
-                elif transaction['to'] is not None:
-                    addresses[transaction['to']]['outputTransactionHashes'].append(
-                        transaction['hash'])
-                transactions[transaction['hash']] = transaction
+            elif transaction['from'] is not None:
+                addresses[transaction['from']]['inputTransactionHashes'].append(
+                    transaction['hash'])
 
-                blocks[transaction['blockHash']]['transactions'] += transaction['hash'] + '+'
+            if transaction['to'] not in addresses and transaction['to'] is not None:
+                addresses[transaction['to']] = {'inputTransactionHashes': [],
+                                                'outputTransactionHashes':
+                                                [transaction['hash']],
+                                                'code': '0x',
+                                                'mined': [],
+                                                'inputTokenTransactions': [],
+                                                'outputTokenTransactions': []}
+            elif transaction['to'] is not None:
+                addresses[transaction['to']]['outputTransactionHashes'].append(
+                    transaction['hash'])
+            transactions[transaction['hash']] = transaction
+
+            blocks[transaction['blockHash']]['transactions'] += transaction['hash'] + '+'
 
             for block_hash in blocks:
                 if (blocks[block_hash]['transactions'] != ''
                         and blocks[block_hash]['transactions'][-1] == '+'):
                     blocks[block_hash]['transactions'] = blocks[block_hash]['transactions'][:-1]
 
-        transactions, addresses = self.gather_receipts(transactions, addresses)
-        return (transactions, addresses)
+        transactions, addresses, contract_addresses, logs = self.gather_receipts(transactions, addresses)
+        return (transactions, addresses, contract_addresses, logs)
 
     def gather_receipts(self, transactions: Dict, addresses: Dict) -> Tuple[Dict, Dict]:
         """
@@ -241,31 +246,52 @@ class DatabaseUpdater:
             addresses: Dictionary holding all currently processed addresses.
         """
         LOG.info('Gathering receipts from csv')
-        with open(self.datapath + 'receipts.csv') as csv_f:
-            csv_receipts = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_receipts:
-                transactions[row['transaction_hash']]['cumulativeGasUsed'] = (
-                    row['cumulative_gas_used'])
-                transactions[row['transaction_hash']]['gasUsed'] = row['gas_used']
-                transactions[row['transaction_hash']]['contractAddress'] = row['contract_address']
+        raw_receipts = self.receipts_gatherer.gather_receipts(list(transactions))
+        contract_addresses = []
+        logs = []
+        for tx_hash, raw_receipt in raw_receipts.items():
+            transactions[tx_hash]['cumulativeGasUsed'] = str(int(raw_receipt['cumulativeGasUsed'], 16))
+            transactions[tx_hash]['gasUsed'] = str(int(raw_receipt['gasUsed'], 16))
+            
+            if raw_receipt['contractAddress'] is not None:
+                contract_addresses.append(raw_receipt['contractAddress'])
+                transactions[tx_hash]['contractAddress'] = raw_receipt['contractAddress']
+            else:
+                transactions[tx_hash]['contractAddress'] = None
 
-                if (row['contract_address'] not in addresses
-                        and row['contract_address'] is not None):
-                    code = self._blockchain.get_code(row['contract_address'])
-                    addresses[row['contract_address']] = {'inputTransactionHashes': [],
+            if (transactions[tx_hash]['contractAddress'] not in addresses
+                        and transactions[tx_hash]['contractAddress'] is not None):
+                    code = self._blockchain.get_code(transactions[tx_hash]['contractAddress'])
+                    addresses[transactions[tx_hash]['contractAddress']] = {'inputTransactionHashes': [],
                                                           'outputTransactionHashes': [],
                                                           'code': code.hex(),
                                                           'mined': [],
                                                           'inputTokenTransactions': [],
                                                           'outputTokenTransactions': []}
-        with open(self.datapath + 'logs.csv') as csv_f:
-            csv_logs = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_logs:
-                transactions[row['transaction_hash']]['logs'] = row['data']
+            transactions[tx_hash]['logs'] = ''
+            for log in raw_receipt['logs']:
+                logs.append(log)
+                transactions[tx_hash]['logs'] += log['data'] + '+'
+                for topic in log['topics']:
+                    transactions[tx_hash]['logs'] += topic + '-'
+                
+                if (transactions[tx_hash]['logs'] != ''
+                        and transactions[tx_hash]['logs'][-1] == '-'):
+                    transactions[tx_hash]['logs'] = transactions[tx_hash]['logs'][:-1]
+                
+                if (transactions[tx_hash]['logs'] != ''
+                            and transactions[tx_hash]['logs'][-1] == '+'):
+                    transactions[tx_hash]['logs'] = transactions[tx_hash]['logs'][:-1]
+                
+                transactions[tx_hash]['logs'] += topic + '|'
+            
+            if (transactions[tx_hash]['logs'] != ''
+                    and transactions[tx_hash]['logs'][-1] == '|'):
+                transactions[tx_hash]['logs'] = transactions[tx_hash]['logs'][:-1]
 
-        return (transactions, addresses)
+        return (transactions, addresses, contract_addresses, logs)
 
-    def gather_tokens(self, transactions: Dict) -> Tuple[Dict, List]:
+    def gather_tokens(self, transactions: Dict, contract_addresses: List[str], logs: List) -> Tuple[Dict, List]:
         """
         Gathers information about newly created ERC-20 and ERC-721 tokens.
 
@@ -276,38 +302,14 @@ class DatabaseUpdater:
             Dictionary of format 'address: token_data', List of token transactions.
         """
         tokens = {}
-        with open(self.datapath + 'tokens.csv') as csv_f:
-            csv_tokens = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_tokens:
-                token = {}
-                token['symbol'] = row['symbol']
-                token['name'] = row['name']
-                token['decimals'] = row['decimals']
-                token['total_supply'] = row['total_supply']
-                tokens[row['address']] = token
-
-        with open(self.datapath + 'contracts.csv') as csv_f:
-            csv_contracts = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_contracts:
-                if row['address'] in tokens:
-                    if row['is_erc20'] == 'True':
-                        tokens[row['address']]['type'] = 'ERC-20'
-                    elif row['is_erc721']:
-                        tokens[row['address']]['type'] = 'ERC-721'
+        tokens = self.tokens_gatherer.get_tokens(contract_addresses)
+        for token_addr, raw_token in tokens.items():
+            tokens[token_addr] = raw_token
 
         token_txs = []
-        with open(self.datapath + 'token_transfers.csv') as csv_f:
-            csv_tokens_tx = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_tokens_tx:
-                token_tx = {}
-                token_tx['token_address'] = row['token_address']
-                token_tx['from'] = row['from_address']
-                token_tx['to'] = row['to_address']
-                token_tx['value'] = row['value']
-                token_tx['transaction_hash'] = row['transaction_hash']
-                token_tx['timestamp'] = transactions[token_tx['transaction_hash']]['timestamp']
-
-                token_txs.append(token_tx)
+        token_txs = self.tokens_gatherer.get_token_transfers(logs)
+        for token_tx in token_txs:
+            token_tx['timestamp'] = transactions[token_tx['transaction_hash']]['timestamp']
 
         return (tokens, token_txs)
 
@@ -531,61 +533,61 @@ class DatabaseUpdater:
             tokens: Dictionary containing tokens.
         """
         LOG.info('Writing to database.')
-        #wb = rocksdb.WriteBatch()
+        wb = rocksdb.WriteBatch()
         counter = 0
         for block_hash, block_dict in blocks.items():
             if 'transactionIndexRange' not in block_dict:
                 block_dict['transactionIndexRange'] = ''
             block_value = coder.encode_block(block_dict)
-            self.db.put(b'block-' + str(block_dict['number']).encode(), block_value)
-            self.db.put(b'hash-block-' + str(block_dict['hash']).encode(),
+            wb.put(b'block-' + str(block_dict['number']).encode(), block_value)
+            wb.put(b'hash-block-' + str(block_dict['hash']).encode(),
                    str(block_dict['number']).encode())
-            self.db.put(b'timestamp-block-' + str(block_dict['timestamp']).encode(),
+            wb.put(b'timestamp-block-' + str(block_dict['timestamp']).encode(),
                    str(block_dict['number']).encode())
             counter += 3
-            # if counter > 1000:
-            #     self.db.write(wb)
-            #     wb = rocksdb.WriteBatch()
-            #     counter = 0
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
 
-        #self.db.write(wb)
-        #wb = rocksdb.WriteBatch()
+        self.db.write(wb)
+        wb = rocksdb.WriteBatch()
         counter = 0
         for tx_hash, tx_dict in transactions.items():
             if 'logs' not in tx_dict:
                 tx_dict['logs'] = ''
             tx_value = coder.encode_transaction(tx_dict)
-            self.db.put(b'transaction-' + tx_hash.encode(), tx_value)
+            wb.put(b'transaction-' + tx_hash.encode(), tx_value)
             counter +=1
-            # if counter > 1000:
-            #     self.db.write(wb)
-            #     wb = rocksdb.WriteBatch()
-            #     counter = 0
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
 
-        #self.db.write(wb)
-        #wb = rocksdb.WriteBatch()
+        self.db.write(wb)
+        wb = rocksdb.WriteBatch()
         counter = 0
         for addr_hash, addr_dict in addresses.items():
             address_value = coder.encode_address(addr_dict)
-            self.db.put(b'address-' + str(addr_hash).encode(), address_value)
+            wb.put(b'address-' + str(addr_hash).encode(), address_value)
             counter += 1
-            # if counter > 1000:
-            #     self.db.write(wb)
-            #     wb = rocksdb.WriteBatch()
-            #     counter = 0
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
 
-        #self.db.write(wb)
-        #wb = rocksdb.WriteBatch()
+        self.db.write(wb)
+        wb = rocksdb.WriteBatch()
         counter = 0
         for addr_hash, token_dict in tokens.items():
             token_value = coder.encode_token(token_dict)
-            self.db.put(b'token-' + str(addr_hash).encode(), token_value)
+            wb.put(b'token-' + str(addr_hash).encode(), token_value)
             counter += 1
-            # if counter > 1000:
-            #     self.db.write(wb)
-            #     wb = rocksdb.WriteBatch()
-            #     counter = 0
-        #self.db.write(wb)
+            if counter > 1000:
+                self.db.write(wb)
+                wb = rocksdb.WriteBatch()
+                counter = 0
+        self.db.write(wb)
 
 
 def update_database(db_location: str,

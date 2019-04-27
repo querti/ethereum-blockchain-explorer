@@ -1,7 +1,7 @@
 """Gather blocks and transactions using asynchronous API."""
 
 import json
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Tuple
 
 from src.requests.thread_local_proxy import ThreadLocalProxy
 from src.requests.auto import get_provider_from_uri
@@ -37,7 +37,7 @@ class BlocksTransactionsGatherer:
         for i in range(start_block, end_block+1):
             request = {'jsonrpc': '2.0',
                        'method': 'eth_getBlockByNumber',
-                       'params': [hex(i), true],
+                       'params': [hex(i), True],
                        'id': i}
             block_requests.append(request)
 
@@ -54,7 +54,7 @@ class BlocksTransactionsGatherer:
         Returns:
             Dictionaries containing blocks and their transactions.
         """
-        requests = self._generate_web3_requests(addresses, height)
+        requests = self._generate_web3_requests(start_block, end_block)
         response = self._batch_gatherer.make_request(json.dumps(requests))
 
         blocks = {}

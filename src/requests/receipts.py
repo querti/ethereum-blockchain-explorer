@@ -52,7 +52,7 @@ class ReceiptsGatherer:
         Returns:
             Dictionaries containing transaction receipts.
         """
-        requests = self._generate_web3_requests(addresses, height)
+        requests = self._generate_web3_requests(tx_hashes)
         response = self._batch_gatherer.make_request(json.dumps(requests))
 
         receipts = {}

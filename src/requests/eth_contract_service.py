@@ -46,7 +46,6 @@ class EthContractService:
     # https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/token/ERC20/ERC20.sol
     def is_erc20_contract(self, function_sighashes):
         c = ContractWrapper(function_sighashes)
-        print(c.implements('totalSupply()'))
         return c.implements('totalSupply()') and \
                c.implements('balanceOf(address)') and \
                c.implements('transfer(address,uint256)') and \
