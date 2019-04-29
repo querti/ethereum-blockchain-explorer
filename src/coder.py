@@ -16,11 +16,11 @@ def encode_transaction(transaction: Dict) -> bytes:
     tx_str += transaction['blockHash'] + '\0'
     tx_str += transaction['blockNumber'] + '\0'
     if transaction['from'] is None:
-        tx_str += '/0'
+        tx_str += '' + '\0'
     else:
         tx_str += transaction['from'] + '\0'
     if transaction['to'] is None:
-        tx_str += '/0'
+        tx_str += '' + '\0'
     else:
         tx_str += transaction['to'] + '\0'
     tx_str += transaction['gas'] + '\0'
@@ -54,6 +54,7 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     """
     tx_items = raw_transaction.decode().split('\0')
     transaction = {}
+    print(tx_items)
 
     transaction['blockHash'] = tx_items[0]
     transaction['blockNumber'] = tx_items[1]
@@ -79,9 +80,9 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
         full_log['data'] = fields[0]
         if len(fields) == 2:
             topics = fields[1].split('-')
-            log['topics'] = topics
+            full_log['topics'] = topics
         else:
-            log['topics'] = []
+            full_log['topics'] = []
         logs.append(full_log)
     
     transaction['logs'] = logs
@@ -114,7 +115,7 @@ def encode_block(block: Dict) -> bytes:
     block_str += block['timestamp'] + '\0'
     # block_str += block['transactionIndexRange'] + '\0'
     block_str += block['sha3Uncles'] + '\0'
-    block_str += block['transactions']
+    block_str += block['transactions'] + '\0'
     # REWARD?????
     # block_str += block['hasREWARD???h'] + '\0'
 

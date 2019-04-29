@@ -84,8 +84,8 @@ class DatabaseUpdater:
             else:
                 latest_block = self._highest_block + self._bulk_size
             # TODO: remove later
-            #if self._highest_block + self._bulk_size > 50000:
-            #    break
+            if self._highest_block + self._bulk_size > 50000:
+               break
             # Get data from Node
             # self.retriever.create_csv_files(self._highest_block, latest_block)
 
@@ -229,10 +229,10 @@ class DatabaseUpdater:
 
             blocks[transaction['blockHash']]['transactions'] += transaction['hash'] + '+'
 
-            for block_hash in blocks:
-                if (blocks[block_hash]['transactions'] != ''
-                        and blocks[block_hash]['transactions'][-1] == '+'):
-                    blocks[block_hash]['transactions'] = blocks[block_hash]['transactions'][:-1]
+        for block_hash in blocks:
+            if (blocks[block_hash]['transactions'] != ''
+                    and blocks[block_hash]['transactions'][-1] == '+'):
+                blocks[block_hash]['transactions'] = blocks[block_hash]['transactions'][:-1]
 
         transactions, addresses, contract_addresses, logs = self.gather_receipts(transactions, addresses)
         return (transactions, addresses, contract_addresses, logs)
@@ -533,60 +533,30 @@ class DatabaseUpdater:
             tokens: Dictionary containing tokens.
         """
         LOG.info('Writing to database.')
+        print("b: {}, t: {}, a: {}, to: {}".format(len(blocks), len(transactions), len(addresses), len(tokens)))
         wb = rocksdb.WriteBatch()
-        counter = 0
         for block_hash, block_dict in blocks.items():
-            if 'transactionIndexRange' not in block_dict:
-                block_dict['transactionIndexRange'] = ''
             block_value = coder.encode_block(block_dict)
             wb.put(b'block-' + str(block_dict['number']).encode(), block_value)
             wb.put(b'hash-block-' + str(block_dict['hash']).encode(),
                    str(block_dict['number']).encode())
             wb.put(b'timestamp-block-' + str(block_dict['timestamp']).encode(),
                    str(block_dict['number']).encode())
-            counter += 3
-            if counter > 1000:
-                self.db.write(wb)
-                wb = rocksdb.WriteBatch()
-                counter = 0
 
-        self.db.write(wb)
-        wb = rocksdb.WriteBatch()
-        counter = 0
         for tx_hash, tx_dict in transactions.items():
             if 'logs' not in tx_dict:
                 tx_dict['logs'] = ''
             tx_value = coder.encode_transaction(tx_dict)
             wb.put(b'transaction-' + tx_hash.encode(), tx_value)
-            counter +=1
-            if counter > 1000:
-                self.db.write(wb)
-                wb = rocksdb.WriteBatch()
-                counter = 0
 
-        self.db.write(wb)
-        wb = rocksdb.WriteBatch()
-        counter = 0
         for addr_hash, addr_dict in addresses.items():
             address_value = coder.encode_address(addr_dict)
             wb.put(b'address-' + str(addr_hash).encode(), address_value)
-            counter += 1
-            if counter > 1000:
-                self.db.write(wb)
-                wb = rocksdb.WriteBatch()
-                counter = 0
 
-        self.db.write(wb)
-        wb = rocksdb.WriteBatch()
-        counter = 0
         for addr_hash, token_dict in tokens.items():
             token_value = coder.encode_token(token_dict)
             wb.put(b'token-' + str(addr_hash).encode(), token_value)
-            counter += 1
-            if counter > 1000:
-                self.db.write(wb)
-                wb = rocksdb.WriteBatch()
-                counter = 0
+
         self.db.write(wb)
 
 
@@ -618,7 +588,7 @@ def update_database(db_location: str,
         fell_behind = db_updater.fill_database()
         LOG.info('Database update has been completed.')
         # TODO: for testing purposes
-        #fell_behind = False
+        fell_behind = False
         # If during sync the updater didn't fall too far behind, consider sync finished
         if not fell_behind:
             break
