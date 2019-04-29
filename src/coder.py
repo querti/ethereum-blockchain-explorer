@@ -28,7 +28,6 @@ def encode_transaction(transaction: Dict) -> bytes:
     # tx_str += transaction['hash'] + '\0'
     tx_str += transaction['input'] + '\0'
     tx_str += transaction['nonce'] + '\0'
-    tx_str += transaction['blockNumber'] + '\0'
     tx_str += transaction['value'] + '\0'
     tx_str += transaction['cumulativeGasUsed'] + '\0'
     tx_str += transaction['gasUsed'] + '\0'
@@ -61,13 +60,29 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     # transaction['transactionHash'] = tx_items[6]
     transaction['input'] = tx_items[6]
     transaction['nonce'] = tx_items[7]
-    transaction['transactionBlockIndex'] = tx_items[8]
-    transaction['value'] = tx_items[9]
-    transaction['cumulativeGasUsed'] = tx_items[10]
-    transaction['gasUsed'] = tx_items[11]
-    transaction['logs'] = tx_items[12]
-    transaction['contract_address'] = tx_items[13]
-    transaction['timestamp'] = tx_items[14]
+    transaction['value'] = tx_items[8]
+    transaction['cumulativeGasUsed'] = tx_items[9]
+    transaction['gasUsed'] = tx_items[10]
+    transaction['logs'] = tx_items[11]
+    transaction['contractAddress'] = tx_items[12]
+    transaction['timestamp'] = tx_items[13]
+
+    logs = []
+    if (transaction['logs'] != '' and transaction['logs'][-1] == '|'):
+        transaction['logs'] = transaction['logs'][:-1]
+
+    for log in transaction['logs'].split('|'):
+        fields = log.split('+')
+        full_log = {}
+        full_log['data'] = fields[0]
+        if len(fields) == 2:
+            topics = fields[1].split('-')
+            full_log['topics'] = topics  # type: ignore
+        else:
+            full_log['topics'] = []  # type: ignore
+        logs.append(full_log)
+
+    transaction['logs'] = logs  # type: ignore
 
     return transaction
 
@@ -222,7 +237,7 @@ def decode_token(raw_token: bytes) -> Dict:
     token['symbol'] = token_items[0]
     token['name'] = token_items[1]
     token['decimals'] = token_items[2]
-    token['total_supply'] = token_items[3]
+    token['totalSupply'] = token_items[3]
     token['type'] = token_items[4]
 
     return token

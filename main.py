@@ -2,10 +2,9 @@
 """Ethereum blockchain explorer."""
 
 from time import sleep
-from multiprocessing import Process, Lock
+from multiprocessing import Process
 import argparse
 import os
-import copy
 import sys
 
 import connexion
@@ -91,22 +90,9 @@ def main():
     parser = argparse.ArgumentParser()
     add_args(parser)
     args = parser.parse_args()
-    db_lock = Lock()
     datapath = args.datapath
-    opts = rocksdb.Options()
-    opts.create_if_missing = True
-    opts.max_open_files = 5000
-    opts.write_buffer_size = 1024*1024
-    opts.max_write_buffer_number = 2
-    
-    opts2 = rocksdb.Options()
-    opts2.create_if_missing = True
-    opts2.max_open_files = 5000
-    opts2.write_buffer_size = 1024*1024
-    opts2.max_write_buffer_number = 2
 
-    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True))
-    read_db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True), read_only=True)
+    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True, max_open_files=5000))
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
@@ -114,6 +100,9 @@ def main():
     database_updater.update_database(args.dbpath, args.interface,
                                      args.confirmations, args.bulk_size,
                                      args.parse_traces, datapath, args.gather_tokens, db)
+    read_db = rocksdb.DB(args.db_path,
+                         rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                         read_only=True)
 
     blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
                                                                   args.interface,
@@ -127,7 +116,6 @@ def main():
     blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
-    app.app.config['DB_LOCK'] = db_lock
     app.app.config['DB'] = read_db
     app.add_api('swagger.yaml')
     app.run()

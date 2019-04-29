@@ -6,6 +6,7 @@ from typing import List
 import time
 
 from flask import current_app
+import rocksdb
 
 from src.database_gatherer import DatabaseGatherer
 
@@ -28,7 +29,9 @@ def read_address(addr: str,
         no_tx_list: Maximum transactions to gather.
         db: Database instance (meant to be filled by the decorator).
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -66,7 +69,7 @@ def read_address(addr: str,
         return 'Maximum number of transactions {} couldn\'t be parsed.'.format(no_tx_list), 400
 
     gatherer = DatabaseGatherer(db)
-    full_address = gatherer.get_address(addr, int_time_from, int_time_to,
+    full_address = gatherer.get_address(addr.lower(), int_time_from, int_time_to,
                                         int_val_from, int_val_to, int_no_tx_list)
     if full_address is None:
         return 'Address {} found'.format(addr), 404
@@ -81,9 +84,11 @@ def get_balance(addr: str) -> None:
     Args:
         address: Ethereum address.
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     gatherer = DatabaseGatherer(db)
-    balance = gatherer.get_balance(addr)
+    balance = gatherer.get_balance(addr.lower())
     if balance is None:
         return 'Address {} found'.format(addr), 404
 
@@ -108,7 +113,9 @@ def read_addresses(addrs: List[str],
         no_tx_list: Maximum transactions to gather.
         db: Database instance (meant to be filled by the decorator).
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -147,7 +154,7 @@ def read_addresses(addrs: List[str],
     gatherer = DatabaseGatherer(db)
     full_addresses = []
     for address in addrs:
-        full_addresses.append(gatherer.get_address(address, int_time_from, int_time_to,
+        full_addresses.append(gatherer.get_address(address.lower(), int_time_from, int_time_to,
                                                    int_val_from, int_val_to, int_no_tx_list))
     if full_addresses == []:
         return 'None of the requested addresses found', 404
@@ -162,9 +169,11 @@ def get_token(addr: str) -> None:
     Args:
         addr: Specified token address.
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     gatherer = DatabaseGatherer(db)
-    token = gatherer.get_token(addr)
+    token = gatherer.get_token(addr.lower())
     if token is None:
         return 'Token contract with address {} not found'.format(addr), 404
 

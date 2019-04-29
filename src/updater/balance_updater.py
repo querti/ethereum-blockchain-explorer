@@ -69,9 +69,11 @@ class BalanceUpdater:
             for i, l in enumerate(f):
                 addr_count += 1
 
+        it = 0
         with open(self.datapath + 'addresses.txt', 'r') as f:
             while continue_iteration:
-                LOG.info('Updating balances: {0:.2f}%'.format((it/(addr_count/self._bulk_size))*100))
+                LOG.info('Updating balances: {0:.2f}%'.format(
+                    (it / (addr_count / self._bulk_size)) * 100))
                 it += 1
                 addresses = []
                 for i in range(self._bulk_size):
@@ -99,6 +101,7 @@ class BalanceUpdater:
             address_objects[address] = coder.decode_address(raw_addr)
             address_objects[address]['balance'] = addr_balances[address]
 
+        counter = 0
         wb = rocksdb.WriteBatch()
         for address in address_objects:
             address_value = coder.encode_address(address_objects[address])

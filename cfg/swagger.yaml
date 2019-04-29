@@ -421,19 +421,14 @@ definitions:
       timestamp:
         type: string
         description: Unix timestamp of when the block was generated.
+      sha3Uncles:
+        type: string
+        description: Combined hash of parent block's uncles.
       transactions:
         description: Transactions included in the block.
         type: array
         items:
           $ref: '#/definitions/Transaction'
-      uncles:
-        type: array
-        description: List of uncle hashes.
-        items:
-          type: string
-      blockReward:
-        type: string
-        description: a reward given to the miner.
   Transaction:
     type: object
     properties:
@@ -464,9 +459,6 @@ definitions:
       nonce:
         type: string
         description: The number of transactions made by sender prior to this one.
-      transactionIndex:
-        type: string
-        description: Integer of transaction's index position in the block.
       value:
         type: string
         description: Value transferred in Wei.
@@ -477,8 +469,19 @@ definitions:
         type: string
         description: The amount of gas used by this specific transaction alone.
       logs:
-        type: string
-        description: List of log objects which the transaction generated.
+        type: array
+        description: List of generated logs.
+        items: 
+          type: object
+          properties:
+            data:
+              type: string
+              description: Data of the log.
+            topics:
+              type: array
+              description: Topics of the log.
+              items:
+                type: string
       logsBloom:
         type: string
         description: Bloom filter for the generated logs.
@@ -525,11 +528,53 @@ definitions:
         type: string
         description: Whether the address is a ERC-20 or ERC-721 contract.
       inputTokenTransactions:
-        type: string
-        description: List of token transaction in which this address was an input.
+        type: array
+        description: List of token transactions this address was an input in.
+        items: 
+          type: object
+          properties:
+            addressFrom:
+              type: string
+              description: Input address of the token transfer.
+            addressTo:
+              type: string
+              description: Output address of the token transfer.
+            contractAddress:
+              type: string
+              description: Contract address of the token.
+            timestamp:
+              type: string
+              description: Timestamp of the token transfer.
+            transactionHash:
+              type: string
+              description: Hash of the transaction this transfer was part of.
+            value:
+              type: string
+              description: Transferred value.
       outputTokenTransactions:
-        type: string
-        description: List of token transactions in which this address was an output.
+        type: array
+        description: List of token transactions this address was an input in.
+        items: 
+          type: object
+          properties:
+            addressFrom:
+              type: string
+              description: Input address of the token transfer.
+            addressTo:
+              type: string
+              description: Output address of the token transfer.
+            contractAddress:
+              type: string
+              description: Contract address of the token.
+            timestamp:
+              type: string
+              description: Timestamp of the token transfer.
+            transactionHash:
+              type: string
+              description: Hash of the transaction this transfer was part of.
+            value:
+              type: string
+              description: Transferred value.
   Token:
     type: object
     properties:
@@ -548,6 +593,9 @@ definitions:
       type:
         type: string
         description: Whether the token is ERC-20 or ERC-721.
+      contract:
+        type: string
+        description: Contract address of the token.
   TokenTransaction:
     type: object
     properties:

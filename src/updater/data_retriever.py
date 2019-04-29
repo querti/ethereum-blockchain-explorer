@@ -99,7 +99,7 @@ class DataRetriever:
                         data.append(row['address'])
             with open(self.datapath + 'token_addresses.txt', 'w') as f:
                 f.write('\n'.join(data))
-        
+
         LOG.info('Getting tokens from blockchain')
         # get Tokens
         tokens_cmd = "ethereumetl export_tokens --token-addresses {} " \

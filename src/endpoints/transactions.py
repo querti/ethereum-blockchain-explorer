@@ -4,6 +4,7 @@ from typing import List
 import time
 
 from flask import current_app
+import rocksdb
 
 from src.database_gatherer import DatabaseGatherer
 
@@ -16,9 +17,11 @@ def read_transaction(tx_hash: str) -> None:
         tx_hash: Hash of the transaction.
         db: Database instance (meant to be filled by the decorator).
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     gatherer = DatabaseGatherer(db)
-    transaction = gatherer.get_transaction_by_hash(tx_hash)
+    transaction = gatherer.get_transaction_by_hash(tx_hash.lower())
     if transaction is None:
         return 'Transaction with hash {} not found'.format(tx_hash), 404
 
@@ -33,9 +36,11 @@ def get_transactions_by_bhash(block_hash: str, db=None) -> None:
         block_hash: Hash of the block.
         db: Database instance (meant to be filled by the decorator).
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     gatherer = DatabaseGatherer(db)
-    transactions = gatherer.get_transactions_of_block_by_hash(block_hash)
+    transactions = gatherer.get_transactions_of_block_by_hash(block_hash.lower())
     if transactions is None:
         return 'Block with hash {} not found'.format(block_hash), 404
 
@@ -50,7 +55,9 @@ def get_transactions_by_bindex(block_index: str) -> None:
         block_index: Index of the block.
         db: Database instance (meant to be filled by the decorator).
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     gatherer = DatabaseGatherer(db)
     transactions = gatherer.get_transactions_of_block_by_index(block_index)
     if transactions is None:
@@ -75,7 +82,9 @@ def get_transactions_by_address(address: str,
         val_to: Maximum transferred currency of transactions.
         db: Database instance (meant to be filled by the decorator).
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -106,8 +115,8 @@ def get_transactions_by_address(address: str,
         return 'Minimum value is larger than maximum value', 400
 
     gatherer = DatabaseGatherer(db)
-    transactions = gatherer.get_transactions_of_address(address, int_time_from, int_time_to,
-                                                        int_val_from, int_val_to)
+    transactions = gatherer.get_transactions_of_address(address.lower(), int_time_from,
+                                                        int_time_to, int_val_from, int_val_to)
     if transactions is None:
         return 'No transactions of address {} found'.format(address), 404
 
@@ -130,7 +139,9 @@ def get_transactions_by_addresses(addresses: List[str],
         val_to: Maximum transferred currency of transactions.
         db: Database instance (meant to be filled by the decorator).
     """
-    db = current_app.config['DB']
+    db_path = current_app.config['DB_LOCATION']
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -162,7 +173,7 @@ def get_transactions_by_addresses(addresses: List[str],
     gatherer = DatabaseGatherer(db)
     transactions = []
     for address in addresses:
-        new_transactions = gatherer.get_transactions_of_address(address,
+        new_transactions = gatherer.get_transactions_of_address(address.lower(),
                                                                 int_time_from, int_time_to,
                                                                 int_val_from, int_val_to)
         if new_transactions is None:
