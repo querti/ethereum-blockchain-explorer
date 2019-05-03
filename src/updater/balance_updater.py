@@ -65,13 +65,16 @@ class BalanceUpdater:
         balance_gatherer = BalanceGatherer(self._interface)
         continue_iteration = True
 
+        if not os.path.exists(self.datapath + 'addresses.txt'):
+            return
+
         addr_count = 0
-        with open(self.datapath + 'addresses.txt', 'r+') as f:
+        with open(self.datapath + 'addresses.txt') as f:
             for i, l in enumerate(f):
                 addr_count += 1
 
         it = 0
-        with open(self.datapath + 'addresses.txt', 'r+') as f:
+        with open(self.datapath + 'addresses.txt') as f:
             while continue_iteration:
                 LOG.info('Updating balances: {0:.2f}%'.format(
                     (it / (addr_count / self._bulk_size)) * 100))
