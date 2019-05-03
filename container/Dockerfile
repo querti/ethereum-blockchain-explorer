@@ -14,7 +14,8 @@ ENV LC_ALL en_US.UTF-8
 RUN cd /home &&\
     git clone https://github.com/querti/ethereum-blockchain-explorer.git &&\
     cd /home/ethereum-blockchain-explorer &&\
-    pip3 install -r requirements.txt
+    pip3 install -r requirements.txt &&\
+    pip3 install connexion[swagger-ui]
 
 ADD run.sh /root/run.sh
 RUN chmod +x /root/run.sh

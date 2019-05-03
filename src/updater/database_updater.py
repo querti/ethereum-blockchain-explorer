@@ -77,8 +77,8 @@ class DatabaseUpdater:
                 stop_iteration = True
             else:
                 latest_block = self._highest_block + self._bulk_size
-            # if self._highest_block + self._bulk_size > 50000:
-            #    break
+            if self._highest_block + self._bulk_size > 30000:
+               break
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)
 
@@ -630,7 +630,6 @@ def update_database(db_location: str,
     while True:
         fell_behind = db_updater.fill_database()
         LOG.info('Database update has been completed.')
-        # TODO: for testing purposes
         fell_behind = False
         # If during sync the updater didn't fall too far behind, consider sync finished
         if not fell_behind:
