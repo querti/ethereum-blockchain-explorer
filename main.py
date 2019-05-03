@@ -100,7 +100,7 @@ def main():
     database_updater.update_database(args.dbpath, args.interface,
                                      args.confirmations, args.bulk_size,
                                      args.parse_traces, datapath, args.gather_tokens, db)
-    read_db = rocksdb.DB(args.db_path,
+    read_db = rocksdb.DB(args.dbpath,
                          rocksdb.Options(create_if_missing=True, max_open_files=5000),
                          read_only=True)
 
