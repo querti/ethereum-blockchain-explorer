@@ -7,6 +7,7 @@ do
     if [ "$?" == 1 ]
     then
         ERROR=`cat /home/data/errlog`
+        echo "$ERROR"
         if [[ $ERROR == *"memory"* ]]; then
             SIZE=$(( SIZE / 2 ))
             echo "Decreasing batch size to $SIZE"
