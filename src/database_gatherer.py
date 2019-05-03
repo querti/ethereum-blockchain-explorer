@@ -17,7 +17,7 @@ class DatabaseGatherer:
         Initialization.
 
         Args:
-                db: Database instance.
+            db: Database instance.
         """
         self.db = db
 

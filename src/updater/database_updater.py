@@ -77,7 +77,6 @@ class DatabaseUpdater:
                 stop_iteration = True
             else:
                 latest_block = self._highest_block + self._bulk_size
-            # TODO: remove later
             # if self._highest_block + self._bulk_size > 50000:
             #    break
             # Get data from Node
@@ -91,7 +90,7 @@ class DatabaseUpdater:
                 tokens, token_txs = ({}, [])
             if self.process_traces:
                 addresses = self.add_trace_addresses(addresses, self._highest_block, latest_block)
-            # every 10th batch, save addresses to file and remove duplicates
+            # every 5th batch, save addresses to file and remove duplicates
             if batch_index % 5 == 0:
                 self.balance_updater._save_addresses(addresses, True)
             else:

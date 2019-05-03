@@ -39,10 +39,11 @@ class BalanceUpdater:
             addresses: Addresses gathered in this batch.
             sort: Whether to sort and filter uniue addresses.
         """
-        LOG.info('Saving addresses')
-        addr_str = '\n' + '\n'.join(addresses.keys())
-        with open(self.datapath + 'addresses.txt', 'a+') as f:
-            f.write(addr_str)
+        if addresses != {}:
+            LOG.info('Saving addresses')
+            addr_str = '\n' + '\n'.join(addresses.keys())
+            with open(self.datapath + 'addresses.txt', 'a+') as f:
+                f.write(addr_str)
 
         if sort:
             LOG.info('Removing duplicate addresses.')
@@ -74,14 +75,15 @@ class BalanceUpdater:
             while continue_iteration:
                 LOG.info('Updating balances: {0:.2f}%'.format(
                     (it / (addr_count / self._bulk_size)) * 100))
-                it += 1
                 addresses = []
                 for i in range(self._bulk_size):
                     line = f.readline()
-                    if line == '':
+                    if it > (addr_count / self._bulk_size):
                         continue_iteration = False
                         break
-                    addresses.append(line[:-1])
+                    if line != '':
+                        addresses.append(line[:-1])
+                it += 1
                 balances = balance_gatherer._gather_balances(addresses, blockchain_height)
                 self._update_db_balances(balances)
 
@@ -98,6 +100,8 @@ class BalanceUpdater:
         address_objects = {}
         for address in addr_balances:
             raw_addr = self.db.get(b'address-' + str(address).encode())
+            if raw_addr is None:
+                continue
             address_objects[address] = coder.decode_address(raw_addr)
             address_objects[address]['balance'] = addr_balances[address]
 
