@@ -104,19 +104,16 @@ def main():
                          rocksdb.Options(create_if_missing=True, max_open_files=5000),
                          read_only=True)
 
-    # blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
-    #                                                               args.interface,
-    #                                                               args.confirmations,
-    #                                                               args.bulk_size,
-    #                                                               args.parse_traces,
-    #                                                               datapath,
-    #                                                               args.gather_tokens,
-    #                                                               args.refresh, db))
-    # blockchain_daemon_p.daemon = True
-    # blockchain_daemon_p.start()
-    database_updater.update_database(args.dbpath, args.interface,
-                                     args.confirmations, args.bulk_size,
-                                     args.parse_traces, datapath, args.gather_tokens, db)
+    blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
+                                                                  args.interface,
+                                                                  args.confirmations,
+                                                                  args.bulk_size,
+                                                                  args.parse_traces,
+                                                                  datapath,
+                                                                  args.gather_tokens,
+                                                                  args.refresh, db))
+    blockchain_daemon_p.daemon = True
+    blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
     app.app.config['DB'] = read_db
