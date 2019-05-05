@@ -78,8 +78,8 @@ class DatabaseUpdater:
                 stop_iteration = True
             else:
                 latest_block = self._highest_block + self._bulk_size
-            # if self._highest_block + self._bulk_size > 30000:
-            #    break
+            if self._highest_block + self._bulk_size > 30000:
+               break
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)
 
@@ -109,7 +109,6 @@ class DatabaseUpdater:
             time.sleep(2)
 
         # Update balances of all addresses
-        sys.exit()
         self.balance_updater._save_addresses({}, True)
         self.balance_updater._update_address_balances(last_block)
 
