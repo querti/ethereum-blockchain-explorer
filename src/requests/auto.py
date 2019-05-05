@@ -29,7 +29,7 @@ from web3 import IPCProvider, HTTPProvider
 from src.requests.ipc import BatchIPCProvider
 from src.requests.rpc import BatchHTTPProvider
 
-DEFAULT_TIMEOUT = 86400
+DEFAULT_TIMEOUT = 60
 
 
 def get_provider_from_uri(uri_string, timeout=DEFAULT_TIMEOUT, batch=False):

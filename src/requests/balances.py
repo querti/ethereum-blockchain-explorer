@@ -19,6 +19,7 @@ class BalanceGatherer:
         """
         self._interface = interface
         self._batch_gatherer = ThreadLocalProxy(lambda: get_provider_from_uri(self._interface,
+                                                                              timeout=18000,
                                                                               batch=True))
 
     def _generate_web3_requests(self, addresses: List[str], height: int) -> List[Any]:
