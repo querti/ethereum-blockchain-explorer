@@ -4,6 +4,7 @@ from typing import Any, Tuple, List, Dict
 import logging
 import csv
 import time
+import sys
 
 import rocksdb
 
@@ -108,6 +109,7 @@ class DatabaseUpdater:
             time.sleep(2)
 
         # Update balances of all addresses
+        sys.exit()
         self.balance_updater._save_addresses({}, True)
         self.balance_updater._update_address_balances(last_block)
 
