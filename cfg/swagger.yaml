@@ -372,6 +372,21 @@ paths:
           description: Ethereum blockchain address of the token.
           type: string
           required: True
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginnng of the blockchain).
+          type: string
+          required: False
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the token (implicitly all transactions).
+          type: string
+          required: False
       responses:
         200:
           description: Successfully retrieved the token data.
@@ -587,24 +602,38 @@ definitions:
       decimals:
         type: string
         description: Number of decimal places this token can be devided into.
-      total_supply:
+      totalSupply:
         type: string
         description: Total supply of the Token.
       type:
         type: string
         description: Whether the token is ERC-20 or ERC-721.
-      contract:
+      address:
         type: string
         description: Contract address of the token.
+      tokenTransactions:
+        type: array
+        items:
+          $ref: '#/definitions/TokenTransaction'
+        description: List of token transactions of this token.
   TokenTransaction:
     type: object
     properties:
-      token_address:
+      tokenAddress:
         type: string
         description: Address of the token contract.
-      address:
+      addressFrom:
         type: string
-        description: Address of sender/receiver of this token transaction.
+        description: Address of sender of this token transaction.
+      addressTo:
+        type: string
+        description: Address of receiver of this token transaction.
       value:
         type: string
         description: Amount of transferred currency.
+      transactionHash:
+        type: string
+        description: Hash of the transaction this token transfer was included in.
+      timestamp:
+        type: string
+        description: Timestamp of this otken transaction.

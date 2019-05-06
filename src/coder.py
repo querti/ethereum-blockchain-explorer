@@ -1,5 +1,5 @@
 """Coder for preparing data for DB writes and parsing data from DB reads."""
-from typing import Dict, List
+from typing import Dict, List, Union
 
 
 def encode_transaction(transaction: Dict) -> bytes:
@@ -166,12 +166,12 @@ def encode_address(address: Dict) -> bytes:
     address_str = ''
     address_str += address['balance'] + '\0'
     address_str += address['code'] + '\0'
-    address_str += address['inputTransactions'] + '\0'
-    address_str += address['outputTransactions'] + '\0'
-    address_str += address['mined'] + '\0'
+    address_str += str(address['inputTxIndex']) + '\0'
+    address_str += str(address['outputTxIndex']) + '\0'
+    address_str += str(address['minedIndex']) + '\0'
     address_str += address['tokenContract'] + '\0'
-    address_str += address['inputTokenTransactions'] + '\0'
-    address_str += address['outputTokenTransactions'] + '\0'
+    address_str += str(address['inputTokenTxIndex']) + '\0'
+    address_str += str(address['outputTokenTxIndex']) + '\0'
 
     return address_str.encode()
 
@@ -187,16 +187,16 @@ def decode_address(raw_address: bytes) -> Dict:
         Address in dictionary form.
     """
     address_items = raw_address.decode().split('\0')
-    address = {}
+    address = {}  # type: Dict[str, Union[str, int]]
 
     address['balance'] = address_items[0]
     address['code'] = address_items[1]
-    address['inputTransactions'] = address_items[2]
-    address['outputTransactions'] = address_items[3]
-    address['mined'] = address_items[4]
+    address['inputTxIndex'] = int(address_items[2])
+    address['outputTxIndex'] = int(address_items[3])
+    address['minedIndex'] = int(address_items[4])
     address['tokenContract'] = address_items[5]
-    address['inputTokenTransactions'] = address_items[6]
-    address['outputTokenTransactions'] = address_items[7]
+    address['inputTokenTxIndex'] = int(address_items[6])
+    address['outputTokenTxIndex'] = int(address_items[7])
 
     return address
 
@@ -215,8 +215,9 @@ def encode_token(token: Dict) -> bytes:
     token_str += token['symbol'] + '\0'
     token_str += token['name'] + '\0'
     token_str += token['decimals'] + '\0'
-    token_str += token['total_supply'] + '\0'
+    token_str += token['totalSupply'] + '\0'
     token_str += token['type'] + '\0'
+    token_str += str(token['txIndex']) + '\0'
 
     return token_str.encode()
 
@@ -232,15 +233,60 @@ def decode_token(raw_token: bytes) -> Dict:
         Token in dictionary form.
     """
     token_items = raw_token.decode().split('\0')
-    token = {}
+    token = {}  # type: Dict[str, Union[str, int]]
 
     token['symbol'] = token_items[0]
     token['name'] = token_items[1]
     token['decimals'] = token_items[2]
     token['totalSupply'] = token_items[3]
     token['type'] = token_items[4]
+    token['txIndex'] = int(token_items[5])
 
     return token
+
+
+def encode_token_tx(token_tx: Dict) -> bytes:
+    """
+    Creates bytes representation of token transaction data.
+
+    args:
+        token_tx: Dictionary containing the token transaction data.
+
+    returns:
+        Bytes to be saved as token value in DB.
+    """
+    token_tx_str = ''
+    token_tx_str += token_tx['tokenAddress'] + '\0'
+    token_tx_str += token_tx['addressFrom'] + '\0'
+    token_tx_str += token_tx['addressTo'] + '\0'
+    token_tx_str += token_tx['value'] + '\0'
+    token_tx_str += token_tx['transactionHash'] + '\0'
+    token_tx_str += token_tx['timestamp'] + '\0'
+
+    return token_tx_str.encode()
+
+
+def decode_token_tx(raw_token_tx: bytes) -> Dict:
+    """
+    Decodes bytes representation of an token transaction into a dictionary.
+
+    Args:
+        raw_token: Bytes representing a token transaction.
+
+    Returns:
+        Token transaction in dictionary form.
+    """
+    token_tx_items = raw_token_tx.decode().split('\0')
+    token_tx = {}
+
+    token_tx['tokenAddress'] = token_tx_items[0]
+    token_tx['addressFrom'] = token_tx_items[1]
+    token_tx['addressTo'] = token_tx_items[2]
+    token_tx['value'] = token_tx_items[3]
+    token_tx['transactionHash'] = token_tx_items[4]
+    token_tx['timestamp'] = token_tx_items[5]
+
+    return token_tx
 
 
 def encode_erc20_balances(erc20_balances: Dict) -> str:

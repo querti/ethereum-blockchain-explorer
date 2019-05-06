@@ -35,7 +35,6 @@ class BalanceGatherer:
         """
         balance_requests = []
         hex_height = hex(height)
-        # TODO: remove this
         hex_height = 'latest'
 
         for address in addresses:
@@ -63,7 +62,7 @@ class BalanceGatherer:
 
         addr_dict = {}
         for item in response:
-            if item.get('result') is None:
+            if isinstance(item, str) or item.get('result') is None:
                 continue
             addr_dict[item.get('id')] = str(int(item.get('result'), 16))
 

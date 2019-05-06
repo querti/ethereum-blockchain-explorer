@@ -3,7 +3,6 @@ from typing import Any, Dict
 import subprocess
 import logging
 import os
-import sys
 
 import rocksdb
 
@@ -109,15 +108,9 @@ class BalanceUpdater:
             address_objects[address] = coder.decode_address(raw_addr)
             address_objects[address]['balance'] = addr_balances[address]
 
-        counter = 0
         wb = rocksdb.WriteBatch()
         for address in address_objects:
             address_value = coder.encode_address(address_objects[address])
             wb.put(b'address-' + str(address).encode(), address_value)
-            counter += 1
-            if counter > 1000:
-                self.db.write(wb)
-                wb = rocksdb.WriteBatch()
-                counter = 0
 
         self.db.write(wb)

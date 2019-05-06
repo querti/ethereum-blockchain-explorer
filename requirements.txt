@@ -1,5 +1,5 @@
-connexion==2.2.0
-python-rocksdb==0.7.0
-web3==4.9.1
-ethereum-etl==1.2.3
+connexion
+python-rocksdb
+eth-typing==1.3.0
+ethereum-etl
 connexion[swagger-ui]

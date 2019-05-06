@@ -2,6 +2,7 @@
 # from multiprocessing import Lock
 from typing import Any, List, Dict, Union
 import logging
+import itertools
 
 import src.coder as coder
 
@@ -270,13 +271,27 @@ class DatabaseGatherer:
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
-        input_transactions = []
-        output_transactions = []
+        input_transactions = []  # type: List[Dict]
+        output_transactions = []  # type: List[Dict]
 
-        for transaction in address['inputTransactions'].split('|'):
-            if transaction == '':
-                break
-            tx_hash, timestamp, value = transaction.split('+')
+        if address['inputTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-i-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            input_tx_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        if address['outputTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-o-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            output_tx_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        input_transactions = []
+        for tx_data in input_tx_hashes:
+            tx_decoded = tx_data.decode()
+            tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
@@ -284,16 +299,17 @@ class DatabaseGatherer:
                 transaction['hash'] = tx_hash
                 input_transactions.append(transaction)
 
-        for transaction in address['outputTransactions'].split('|'):
-            if transaction == '':
-                break
-            tx_hash, timestamp, value = transaction.split('+')
+        output_transactions = []
+        for tx_data in output_tx_hashes:
+            tx_decoded = tx_data.decode()
+            tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
                 transaction = coder.decode_transaction(raw_tx)
                 transaction['hash'] = tx_hash
                 output_transactions.append(transaction)
+
         return input_transactions + output_transactions
 
     def get_address(self, addr: str, time_from: int, time_to: int,
@@ -308,7 +324,7 @@ class DatabaseGatherer:
             time_to: Ending datetime to take transactions from.
             val_from: Minimum transferred currency of the transactions.
             val_to: Maximum transferred currency of transactions.
-            no_tx_list: Maximum transactions to return
+            no_tx_list: Maximum transactions to return.
 
         Returns:
             Address information along with its transactions.
@@ -318,73 +334,119 @@ class DatabaseGatherer:
             return None
         address = coder.decode_address(raw_address)
 
-        input_transactions = []
-        output_transactions = []
-        tx_counter = 0
+        input_tx_hashes = []  # type: List[bytes]
+        output_tx_hashes = []  # type: List[bytes]
 
-        for transaction in address['inputTransactions'].split('|'):
-            if tx_counter > no_tx_list:
+        if address['inputTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-i-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            input_tx_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        if address['outputTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-o-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            output_tx_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        found_txs = 0
+
+        input_transactions = []
+        for tx_data in input_tx_hashes:
+            if found_txs >= no_tx_list:
                 break
-            if transaction == '':
-                break
-            tx_hash, timestamp, value = transaction.split('+')
+            tx_decoded = tx_data.decode()
+            tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
                 transaction = coder.decode_transaction(raw_tx)
                 transaction['hash'] = tx_hash
                 input_transactions.append(transaction)
-                tx_counter += 1
+                found_txs += 1
 
-        for transaction in address['outputTransactions'].split('|'):
-            if tx_counter > no_tx_list:
+        output_transactions = []
+        for tx_data in output_tx_hashes:
+            if found_txs >= no_tx_list:
                 break
-            if transaction == '':
-                break
-            tx_hash, timestamp, value = transaction.split('+')
+            tx_decoded = tx_data.decode()
+            tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
                 raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
                 transaction = coder.decode_transaction(raw_tx)
                 transaction['hash'] = tx_hash
                 output_transactions.append(transaction)
-                tx_counter += 1
+                found_txs += 1
 
-        address['mined'] = address['mined'].split('|')
-        if address['mined'] == ['']:
-            address['mined'] = []
-
-        del address['inputTransactions']
-        del address['outputTransactions']
+        del address['inputTxIndex']
+        del address['outputTxIndex']
 
         address['inputTransactions'] = input_transactions
         address['outputTransactions'] = output_transactions
 
-        input_token_txs = address['inputTokenTransactions'].split('|')
-        output_token_txs = address['outputTokenTransactions'].split('|')
-        address['outputTokenTransactions'] = []
-        for input_token_tx in input_token_txs:
-            if input_token_tx == '':
-                break
-            contract_addr, addr_from, value, tx_hash, timestamp = input_token_tx.split('+')
-            address['outputTokenTransactions'].append({'contractAddress': contract_addr,
-                                                       'addressFrom': addr_from,
-                                                       'addressTo': addr,
-                                                       'value': value,
-                                                       'transactionHash': tx_hash,
-                                                       'timestamp': timestamp})
+        mined_hashes = []  # type: List[bytes]
+        if address['minedIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-b-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            mined_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
 
-        address['inputTokenTransactions'] = []
-        for output_token_tx in output_token_txs:
-            if output_token_tx == '':
+        del address['minedIndex']
+        address['mined'] = list(map(lambda x: x.decode(), mined_hashes))
+
+        input_token_txs = []
+        output_token_txs = []
+
+        input_token_tx_indexes = []  # type: List[bytes]
+        output_token_tx_indexes = []  # type: List[bytes]
+
+        if address['inputTokenTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-ti-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            input_token_tx_indexes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        if address['outputTokenTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-to-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            output_token_tx_indexes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        found_txs = 0
+
+        for token_tx_index in input_token_tx_indexes:
+            if found_txs >= no_tx_list:
                 break
-            contract_addr, addr_to, value, tx_hash, timestamp = output_token_tx.split('+')
-            address['inputTokenTransactions'].append({'contractAddress': contract_addr,
-                                                      'addressTo': addr_to,
-                                                      'addressFrom': addr,
-                                                      'value': value,
-                                                      'transactionHash': tx_hash,
-                                                      'timestamp': timestamp})
+            tx_decoded = token_tx_index.decode()
+            tx_index, timestamp = tx_decoded.split('-')
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)):
+                raw_tx = self.db.get(b'token-tx-' + tx_index.encode())
+                token_tx = coder.decode_token_tx(raw_tx)
+                input_token_txs.append(token_tx)
+                found_txs += 1
+
+        for token_tx_index in output_token_tx_indexes:
+            if found_txs >= no_tx_list:
+                break
+            tx_decoded = token_tx_index.decode()
+            tx_index, timestamp = tx_decoded.split('-')
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)):
+                raw_tx = self.db.get(b'token-tx-' + tx_index.encode())
+                token_tx = coder.decode_token_tx(raw_tx)
+                output_token_txs.append(token_tx)
+                found_txs += 1
+
+        del address['inputTokenTxIndex']
+        del address['outputTokenTxIndex']
+
+        address['inputTokenTransactions'] = input_token_txs
+        address['outputTokenTransactions'] = output_token_txs
 
         return address
 
@@ -405,12 +467,16 @@ class DatabaseGatherer:
 
         return address['balance']
 
-    def get_token(self, addr: str) -> Union[Dict[str, Any], None]:
+    def get_token(self, addr: str, time_from: int, time_to: int,
+                  no_tx_list: int) -> Union[Dict[str, Any], None]:
         """
         Get informtion about a token based on its contract address.
 
         Args:
             addr: Token address.
+            time_from: Beginning datetime to take transactions from.
+            time_to: Ending datetime to take transactions from.
+            no_tx_list: Maximum transactions to return.
 
         Returns:
             Information about a token.
@@ -420,5 +486,29 @@ class DatabaseGatherer:
             return None
         token = coder.decode_token(raw_token)
         token['address'] = addr
+
+        token_tx_indexes = []  # type: List[bytes]
+        if token['txIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-tt-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            token_tx_indexes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        found_txs = 0
+        token_txs = []
+        for token_tx_index in token_tx_indexes:
+            if found_txs >= no_tx_list:
+                break
+            tx_decoded = token_tx_index.decode()
+            tx_index, timestamp = tx_decoded.split('-')
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)):
+                raw_tx = self.db.get(b'token-tx-' + tx_index.encode())
+                token_tx = coder.decode_token_tx(raw_tx)
+                token_txs.append(token_tx)
+                found_txs += 1
+
+        del token['txIndex']
+        token['tokenTransactions'] = token_txs
 
         return token

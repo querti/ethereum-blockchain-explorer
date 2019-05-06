@@ -162,18 +162,43 @@ def read_addresses(addrs: List[str],
     return full_addresses
 
 
-def get_token(addr: str) -> None:
+def get_token(addr: str,
+              time_from: str = '0',
+              time_to: str = '',
+              no_tx_list: str = '') -> None:
     """
     Get information about a token specified by its address.
 
     Args:
         addr: Specified token address.
+        time_from: Beginning datetime to take token transactions from.
+        time_to: Ending datetime to take token transactions from.
+        no_tx_list: Maximum transactions to gather.
     """
+    try:
+        int_time_from = int(time_from)
+    except ValueError:
+        return 'Start time {} couldn\'t be parsed.'.format(time_from), 400
+
+    if time_to == '':
+        time_to = str(int(time.time()) + 1000000)
+    try:
+        int_time_to = int(time_to)
+    except ValueError:
+        return 'End time {} couldn\'t be parsed.'.format(time_to), 400
+
+    if no_tx_list == '':
+        no_tx_list = str(1000000000000000000000000000000)
+    try:
+        int_no_tx_list = int(no_tx_list)
+    except ValueError:
+        return 'Maximum number of transactions {} couldn\'t be parsed.'.format(no_tx_list), 400
+
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
                     read_only=True)
     gatherer = DatabaseGatherer(db)
-    token = gatherer.get_token(addr.lower())
+    token = gatherer.get_token(addr.lower(), int_time_from, int_time_to, int_no_tx_list)
     if token is None:
         return 'Token contract with address {} not found'.format(addr), 404
 
