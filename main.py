@@ -59,9 +59,8 @@ def add_args(parser: Any) -> None:
                         help='How many seconds to wait until the next database refresh.')
     parser.add_argument('--bulk_size', type=int, default=5000,
                         help='How many blocks should be processed at once.')
-    parser.add_argument('--parse_traces', type=bool, default=False,
-                        help='Whether the internal transactions should be examined as well.'
-                             'Warning: May take a long time.')
+    parser.add_argument('--internal_txs', type=bool, default=False,
+                        help='Whether to also gather internal transactions.')
     parser.add_argument('--datapath', type=str, default='data/',
                         help='Path, where temporary update data should be saved.'
                              'Warning: It will reach several GBs during the initial sync.')
@@ -81,7 +80,7 @@ def init_data_dir(datapath: str):
 
     if not os.path.exists(datapath + '/progress.txt'):
         with open(datapath + '/progress.txt', 'w+') as f:
-            f.write('0\n0\n0')
+            f.write('5558416\n0\n0\n0')
 
 
 def main():
@@ -99,7 +98,7 @@ def main():
     # Before API interface is started, database is created/updated.
     database_updater.update_database(args.dbpath, args.interface,
                                      args.confirmations, args.bulk_size,
-                                     args.parse_traces, datapath, args.gather_tokens, db)
+                                     args.internal_txs, datapath, args.gather_tokens, db)
     read_db = rocksdb.DB(args.dbpath,
                          rocksdb.Options(create_if_missing=True, max_open_files=5000),
                          read_only=True)
@@ -108,7 +107,7 @@ def main():
                                                                   args.interface,
                                                                   args.confirmations,
                                                                   args.bulk_size,
-                                                                  args.parse_traces,
+                                                                  args.internal_txs,
                                                                   datapath,
                                                                   args.gather_tokens,
                                                                   args.refresh, db))

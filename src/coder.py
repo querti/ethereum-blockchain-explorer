@@ -33,7 +33,8 @@ def encode_transaction(transaction: Dict) -> bytes:
     tx_str += transaction['gasUsed'] + '\0'
     tx_str += transaction['logs'] + '\0'
     tx_str += transaction.get('contractAddress', '') + '\0'
-    tx_str += transaction['timestamp']
+    tx_str += transaction['timestamp'] + '\0'
+    tx_str += str(transaction['internalTxIndex']) + '\0'
 
     return tx_str.encode()
 
@@ -66,6 +67,7 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     transaction['logs'] = tx_items[11]
     transaction['contractAddress'] = tx_items[12]
     transaction['timestamp'] = tx_items[13]
+    transaction['internalTxIndex'] = int(tx_items[14])
 
     logs = []
     if (transaction['logs'] != '' and transaction['logs'][-1] == '|'):
@@ -172,6 +174,8 @@ def encode_address(address: Dict) -> bytes:
     address_str += address['tokenContract'] + '\0'
     address_str += str(address['inputTokenTxIndex']) + '\0'
     address_str += str(address['outputTokenTxIndex']) + '\0'
+    address_str += str(address['inputIntTxIndex']) + '\0'
+    address_str += str(address['outputIntTxIndex']) + '\0'
 
     return address_str.encode()
 
@@ -197,6 +201,8 @@ def decode_address(raw_address: bytes) -> Dict:
     address['tokenContract'] = address_items[5]
     address['inputTokenTxIndex'] = int(address_items[6])
     address['outputTokenTxIndex'] = int(address_items[7])
+    address['inputIntTxIndex'] = int(address_items[8])
+    address['outputIntTxIndex'] = int(address_items[9])
 
     return address
 
@@ -271,7 +277,7 @@ def decode_token_tx(raw_token_tx: bytes) -> Dict:
     Decodes bytes representation of an token transaction into a dictionary.
 
     Args:
-        raw_token: Bytes representing a token transaction.
+        raw_token_tx: Bytes representing a token transaction.
 
     Returns:
         Token transaction in dictionary form.
@@ -289,80 +295,60 @@ def decode_token_tx(raw_token_tx: bytes) -> Dict:
     return token_tx
 
 
-def encode_erc20_balances(erc20_balances: Dict) -> str:
+def encode_internal_tx(internal_tx: Dict) -> bytes:
     """
-    Encodes dictionary containing ERC-20 balances into a string.
+    Creates bytes representation of internal transaction data.
+
+    args:
+        internal_tx: Dictionary containing the internal transaction data.
+
+    returns:
+        Bytes to be saved as internal value in DB.
+    """
+    internal_tx_str = ''
+    internal_tx_str += internal_tx['from'] + '\0'
+    internal_tx_str += internal_tx['to'] + '\0'
+    internal_tx_str += internal_tx['value'] + '\0'
+    internal_tx_str += internal_tx['input'] + '\0'
+    internal_tx_str += internal_tx['output'] + '\0'
+    internal_tx_str += internal_tx['traceType'] + '\0'
+    internal_tx_str += internal_tx['callType'] + '\0'
+    internal_tx_str += internal_tx['rewardType'] + '\0'
+    internal_tx_str += internal_tx['gas'] + '\0'
+    internal_tx_str += internal_tx['gasUsed'] + '\0'
+    internal_tx_str += internal_tx['transactionHash'] + '\0'
+    internal_tx_str += internal_tx['timestamp'] + '\0'
+    internal_tx_str += internal_tx['error'] + '\0'
+
+
+    return internal_tx_str.encode()
+
+
+def decode_internal_tx(raw_internal_tx: bytes) -> Dict:
+    """
+    Decodes bytes representation of an internal transaction into a dictionary.
 
     Args:
-        erc20_balances: Dictionary of balances.
+        raw_internal_tx: Bytes representing an internal transaction.
 
     Returns:
-        String representing address balances.
+        Internal transaction in dictionary form.
     """
-    erc20_balances_str = ''
-    if not erc20_balances:
-        return ''
-    for addr, balance in erc20_balances.items():
-        erc20_balances_str += '|' + addr + '+' + str(balance)
-    return erc20_balances_str[1:]
+    internal_tx_items = raw_internal_tx.decode().split('\0')
+    internal_tx = {}
 
+    internal_tx['from'] = internal_tx_items[0]
+    internal_tx['to'] = internal_tx_items[1]
+    internal_tx['value'] = internal_tx_items[2]
+    internal_tx['input'] = internal_tx_items[3]
+    internal_tx['output'] = internal_tx_items[4]
+    internal_tx['traceType'] = internal_tx_items[5]
+    internal_tx['callType'] = internal_tx_items[6]
+    internal_tx['rewardType'] = internal_tx_items[7]
+    internal_tx['gas'] = internal_tx_items[8]
+    internal_tx['gasUsed'] = internal_tx_items[9]
+    internal_tx['transactionHash'] = internal_tx_items[10]
+    internal_tx['timestamp'] = internal_tx_items[11]
+    internal_tx['error'] = internal_tx_items[12]
 
-def decode_erc20_balances(erc20_balances_str: str) -> Dict:
-    """
-    Decodes string of ERC-20 balances of an address into a dictionary.
-
-    Args:
-        erc20_balances_str: String representing current erc-20 balances.
-
-    Returns:
-        Dictionary containing all balances.
-    """
-    balances = {}
-    if erc20_balances_str == '':
-        return {}
-    for token in erc20_balances_str.split('|'):
-        token_address, balance = token.split('+')
-        balances['token_address'] = int(balance)
-
-    return balances
-
-
-def encode_erc721_records(erc721_records: Dict[str, List]) -> str:
-    """
-    Encodes dictionary containing ERC-721 records into a string.
-
-    Args:
-        erc721_records: Dictionary of owned items.
-
-    Returns:
-        String representing address's owned items.
-    """
-    erc721_records_str = ''
-    if not erc721_records:
-        return ''
-    for addr, items in erc721_records.items():
-        erc721_records_str += '|' + addr
-        for item in items:
-            erc721_records_str += '+' + item
-
-    return erc721_records_str[1:]
-
-
-def decode_erc721_records(erc721_records_str: str) -> Dict[str, List]:
-    """
-    Decodes string of ERC-721 items of an address into a dictionary.
-
-    Args:
-        erc721_records_str: String representing current erc-721 items.
-
-    Returns:
-        Dictionary containing all address's items.
-    """
-    items = {}
-    if erc721_records_str == '':
-        return {}
-    for token in erc721_records_str.split('|'):
-        records = token.split('+')
-        items[records[0]] = records[1:]
-
-    return items
+    return internal_tx

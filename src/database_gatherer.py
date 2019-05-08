@@ -188,6 +188,23 @@ class DatabaseGatherer:
         transaction = coder.decode_transaction(raw_tx)
         transaction['hash'] = tx_hash
 
+        if transaction['internalTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-tit-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            internal_tx_indexes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        internal_transactions = []
+        for tx_index in internal_tx_indexes:
+            tx_decoded = tx_data.decode()
+            raw_tx = self.db.get(b'internal-tx-' + tx_decoded.encode())
+            transaction = coder.decode_internal_tx(raw_tx)
+            internal_transactions.append(transaction)
+        
+        del transaction['internalTxIndex']
+        transaction['internalTransactions'] = internal_transactions
+
         return transaction
 
     def get_transactions_of_block_by_hash(self,
@@ -216,9 +233,7 @@ class DatabaseGatherer:
             return []
 
         for tx_hash in transaction_hashes:
-            raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-            transaction = coder.decode_transaction(raw_tx)
-            transaction['hash'] = tx_hash
+            transaction = self.get_transaction_by_hash(tx_hash)
             transactions.append(transaction)
 
         return transactions
@@ -244,9 +259,7 @@ class DatabaseGatherer:
             return []
 
         for tx_hash in transaction_hashes:
-            raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-            transaction = coder.decode_transaction(raw_tx)
-            transaction['hash'] = tx_hash
+            transaction = self.get_transaction_by_hash(tx_hash)
             transactions.append(transaction)
 
         return transactions
@@ -295,9 +308,7 @@ class DatabaseGatherer:
             tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
-                raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-                transaction = coder.decode_transaction(raw_tx)
-                transaction['hash'] = tx_hash
+                transaction = self.get_transaction_by_hash(tx_hash)
                 input_transactions.append(transaction)
 
         output_transactions = []
@@ -306,9 +317,7 @@ class DatabaseGatherer:
             tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
-                raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-                transaction = coder.decode_transaction(raw_tx)
-                transaction['hash'] = tx_hash
+                transaction = self.get_transaction_by_hash(tx_hash)
                 output_transactions.append(transaction)
 
         return input_transactions + output_transactions
@@ -366,9 +375,7 @@ class DatabaseGatherer:
             tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
-                raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-                transaction = coder.decode_transaction(raw_tx)
-                transaction['hash'] = tx_hash
+                transaction = self.get_transaction_by_hash(tx_hash)
                 input_transactions.append(transaction)
                 found_txs += 1
 
@@ -380,9 +387,7 @@ class DatabaseGatherer:
             tx_hash, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
-                raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-                transaction = coder.decode_transaction(raw_tx)
-                transaction['hash'] = tx_hash
+                transaction = self.get_transaction_by_hash(tx_hash)
                 output_transactions.append(transaction)
                 found_txs += 1
 
@@ -391,6 +396,57 @@ class DatabaseGatherer:
 
         address['inputTransactions'] = input_transactions
         address['outputTransactions'] = output_transactions
+
+        input_int_tx_hashes = []  # type: List[bytes]
+        output_int_tx_hashes = []  # type: List[bytes]
+
+        if address['inputIntTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-ii-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            input_int_tx_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        if address['outputIntTxIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-io-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            output_int_tx_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        found_txs = 0
+
+        input_int_transactions = []
+        for tx_data in input_int_tx_hashes:
+            if found_txs >= no_tx_list:
+                break
+            tx_decoded = tx_data.decode()
+            tx_index, value, timestamp = tx_decoded.split('-')
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)
+                    and val_from <= int(value) and val_to >= int(value)):
+                raw_tx = self.db.get(b'internal-tx-' + tx_index.encode())
+                internal_tx = coder.decode_internal_tx(raw_tx)
+                input_int_transactions.append(internal_tx)
+                found_txs += 1
+
+        output_int_transactions = []
+        for tx_data in output_int_tx_hashes:
+            if found_txs >= no_tx_list:
+                break
+            tx_decoded = tx_data.decode()
+            tx_index, value, timestamp = tx_decoded.split('-')
+            if (time_from <= int(timestamp) and time_to >= int(timestamp)
+                    and val_from <= int(value) and val_to >= int(value)):
+                raw_tx = self.db.get(b'internal-tx-' + tx_index.encode())
+                internal_tx = coder.decode_internal_tx(raw_tx)
+                output_int_transactions.append(internal_tx)
+                found_txs += 1
+
+        del address['inputIntTxIndex']
+        del address['outputIntTxIndex']
+
+        address['inputInternalTransactions'] = input_int_transactions
+        address['outputInternalTransactions'] = output_int_transactions
 
         mined_hashes = []  # type: List[bytes]
         if address['minedIndex'] > 0:

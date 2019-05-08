@@ -509,6 +509,11 @@ definitions:
       timestamp:
         type: string
         description: Timestamp of the block this transaction is a part of.
+      internalTxIndex:
+        type: array
+        items:
+          $ref: '#/definitions/InternalTransaction'
+        description: List of internal transactions included in this transaction.
   Address:
     type: object
     properties:
@@ -544,52 +549,24 @@ definitions:
         description: Whether the address is a ERC-20 or ERC-721 contract.
       inputTokenTransactions:
         type: array
-        description: List of token transactions this address was an input in.
-        items: 
-          type: object
-          properties:
-            addressFrom:
-              type: string
-              description: Input address of the token transfer.
-            addressTo:
-              type: string
-              description: Output address of the token transfer.
-            contractAddress:
-              type: string
-              description: Contract address of the token.
-            timestamp:
-              type: string
-              description: Timestamp of the token transfer.
-            transactionHash:
-              type: string
-              description: Hash of the transaction this transfer was part of.
-            value:
-              type: string
-              description: Transferred value.
+        items:
+          $ref: '#/definitions/TokenTransaction'
+        description: List of token transactions this address is the input of.
       outputTokenTransactions:
         type: array
-        description: List of token transactions this address was an input in.
-        items: 
-          type: object
-          properties:
-            addressFrom:
-              type: string
-              description: Input address of the token transfer.
-            addressTo:
-              type: string
-              description: Output address of the token transfer.
-            contractAddress:
-              type: string
-              description: Contract address of the token.
-            timestamp:
-              type: string
-              description: Timestamp of the token transfer.
-            transactionHash:
-              type: string
-              description: Hash of the transaction this transfer was part of.
-            value:
-              type: string
-              description: Transferred value.
+        items:
+          $ref: '#/definitions/TokenTransaction'
+        description: List of token transactions this address is the output of.
+      inputInternalTransactions:
+        type: array
+        items:
+          $ref: '#/definitions/InternalTransaction'
+        description: List of internal transactions this address is the input of.
+      outputInternalTransactions:
+        type: array
+        items:
+          $ref: '#/definitions/InternalTransaction'
+        description: List of internal transactions this address is the output of.
   Token:
     type: object
     properties:
@@ -636,4 +613,46 @@ definitions:
         description: Hash of the transaction this token transfer was included in.
       timestamp:
         type: string
-        description: Timestamp of this otken transaction.
+        description: Timestamp of this token transaction.
+  InternalTransaction:
+    type: object
+    properties:
+      from:
+        type: string
+        description: Address of sender of internal transaction.
+      to:
+        type: string
+        description: Address of receiver of internal transaction.
+      value:
+        type: string
+        description: Amount of transferred currency.
+      input:
+        type: string
+        description: Input of the internal transaction.
+      output:
+        type: string
+        description: Output of the internal transaction.
+      traceType:
+        type: string
+        description: Type of the trace.
+      callType:
+        type: string
+        description: Type of the call.
+      rewardType:
+        type: string
+        description: Type of the reward.
+      gas:
+        type: string
+        description: Available gas of the transaction.
+      gasUsed:
+        type: string
+        description: Used gas of the transaction.
+      transactionHash:
+        type: string
+        description: Hash of the parent normal transaction.
+      timestamp:
+        type: string
+        description: Timestamp of this internal transaction.
+      error:
+        type: string
+        description: Error message (if exists).

@@ -24,7 +24,7 @@ class DatabaseUpdater:
                  interface: str,
                  confirmations: int,
                  bulk_size: int,
-                 process_traces: bool = False,
+                 internal_transactions: bool = False,
                  datapath: str = 'data/',
                  gather_tokens_arg: bool = True) -> None:
         """
@@ -38,7 +38,7 @@ class DatabaseUpdater:
             interface: Path to the Geth blockchain node.
             confirmations: How many confirmations a block has to have.
             bulk_size: How many blocks to be included in bulk DB update.
-            process_traces: Whether to get addresses from traces.
+            internal_txs: Whether to gather internal transactions.
             datapath: Path for temporary file created in DB creation.
             gather_tokens: Whether to also gather token information.
         """
@@ -46,7 +46,7 @@ class DatabaseUpdater:
         self.db = db
         self._confirmations = confirmations
         self._bulk_size = bulk_size
-        self.process_traces = process_traces
+        self.internal_txs = internal_transactions
         self.datapath = datapath
         self.gather_tokens_arg = gather_tokens_arg
         with open(self.datapath + 'progress.txt', 'r') as f:
@@ -54,13 +54,15 @@ class DatabaseUpdater:
             self._highest_block = int(data[0])
             self._highest_token_tx = int(data[1])
             self._highest_contract_code = int(data[2])
+            self._highest_internal_tx = int(data[3])
 
         if interface[-4:] == '.ipc':
             self._interface = 'file://' + interface
         else:
             self._interface = interface
 
-        self.retriever = DataRetriever(self._interface, self.datapath, self.gather_tokens_arg)
+        self.retriever = DataRetriever(self._interface, self.datapath, self.gather_tokens_arg,
+                                       self.internal_txs)
         self.balance_updater = BalanceUpdater(self._bulk_size, self.datapath,
                                               self._interface, self.db)
 
@@ -77,19 +79,21 @@ class DatabaseUpdater:
                 stop_iteration = True
             else:
                 latest_block = self._highest_block + self._bulk_size
-            if self._highest_block + self._bulk_size > 30000:
-                break
+            # if self._highest_block + self._bulk_size > 30000:
+            #     break
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)
 
             # Parse the data
-            blocks, transactions, addresses, address_code_asoc = self.gather_blocks()
+            blocks, transactions, addresses, address_code_asoc, int_tx_asoc = self.gather_blocks()
             if self.gather_tokens_arg:
                 tokens, token_txs = self.gather_tokens(transactions)
             else:
                 tokens, token_txs = ({}, [])
-            if self.process_traces:
-                addresses = self.add_trace_addresses(addresses, self._highest_block, latest_block)
+            txs_write_dict = {}
+            if self.internal_txs:
+                addresses, transactions, txs_write_dict, internal_txs = (
+                    self.gather_internal_txs(addresses, transactions, int_tx_asoc))
             # every 5th batch, save addresses to file and remove duplicates
             if batch_index % 5 == 0:
                 self.balance_updater._save_addresses(addresses, True)
@@ -99,13 +103,15 @@ class DatabaseUpdater:
                                                                                      transactions,
                                                                                      tokens,
                                                                                      token_txs)
-            self.update_bulk_db(blocks, transactions, addresses, tokens,
-                                addresses_write_dict, token_txs, address_code_asoc)
+            
+            self.update_bulk_db(blocks, transactions, addresses, tokens, addresses_write_dict,
+                                token_txs, address_code_asoc, internal_txs, int_tx_asoc)
             self._highest_block = latest_block
             with open(self.datapath + 'progress.txt', 'w') as f:
-                f.write('{}\n{}\n{}'.format(self._highest_block,
+                f.write('{}\n{}\n{}\n{}'.format(self._highest_block,
                                             self._highest_token_tx,
-                                            self._highest_contract_code))
+                                            self._highest_contract_code,
+                                            self._highest_internal_tx))
 
             if stop_iteration:
                 break
@@ -156,7 +162,7 @@ class DatabaseUpdater:
                 blocks[block['hash']] = block
                 miners.append((block['miner'], block['hash']))
 
-        transactions, addresses, address_code_asoc = self.gather_transactions(blocks)
+        transactions, addresses, address_code_asoc, int_tx_asoc = self.gather_transactions(blocks)
         for miner in miners:
             if miner[0] not in addresses and miner[0] is not None:
                 addresses[miner[0]] = {'code': '0x',
@@ -164,11 +170,13 @@ class DatabaseUpdater:
                                        'newInputTxs': [],
                                        'newOutputTxs': [],
                                        'newInputTokens': [],
-                                       'newOutputTokens': []}
+                                       'newOutputTokens': [],
+                                       'newIntInputTxs': [],
+                                       'newIntOutputTxs': []}
             elif miner[0] is not None:
                 addresses[miner[0]]['mined'].append(miner[1])
 
-        return (blocks, transactions, addresses, address_code_asoc)
+        return (blocks, transactions, addresses, address_code_asoc, int_tx_asoc)
 
     def gather_transactions(self, blocks: Dict) -> Tuple[Dict, Dict]:
         """
@@ -182,6 +190,7 @@ class DatabaseUpdater:
         LOG.info('Gathering transactions from csv')
         transactions = {}
         addresses = {}  # type: Dict[str, Any]
+        internal_tx_asoc = {}
 
         with open(self.datapath + 'transactions.csv') as csv_f:
             csv_transactions = csv.DictReader(csv_f, delimiter=',')
@@ -197,10 +206,13 @@ class DatabaseUpdater:
                 transaction['input'] = row['input']
                 transaction['nonce'] = row['nonce']
                 transaction['value'] = row['value']
+                transaction['internalTxIndex'] = 0
                 transaction['timestamp'] = blocks[row['block_hash']]['timestamp']
                 # transaction['index'] = str(current_highest_tx)
+                internal_tx_asoc[row['block_number'] + '-' + row['transaction_index']] = (
+                    row['hash'])
 
-                if transaction['from'] not in addresses and transaction['from'] is not None:
+                if transaction['from'] not in addresses and transaction['from'] != '':
                     addresses[transaction['from']] = {'code': '0x',
                                                       'mined': [],
                                                       'newInputTxs': [],
@@ -208,12 +220,14 @@ class DatabaseUpdater:
                                                                         transaction['value'],
                                                                         transaction['timestamp'])],
                                                       'newInputTokens': [],
-                                                      'newOutputTokens': []}
-                elif transaction['from'] is not None:
+                                                      'newOutputTokens': [],
+                                                      'newIntInputTxs': [],
+                                                      'newIntOutputTxs': []}
+                elif transaction['from'] != '':
                     addresses[transaction['from']]['newOutputTxs'].append(
                         (transaction['hash'], transaction['value'], transaction['timestamp']))
 
-                if transaction['to'] not in addresses and transaction['to'] is not None:
+                if transaction['to'] not in addresses and transaction['to'] != '':
                     addresses[transaction['to']] = {'code': '0x',
                                                     'mined': [],
                                                     'newInputTxs': [(transaction['hash'],
@@ -221,8 +235,10 @@ class DatabaseUpdater:
                                                                      transaction['timestamp'])],
                                                     'newOutputTxs': [],
                                                     'newInputTokens': [],
-                                                    'newOutputTokens': []}
-                elif transaction['to'] is not None:
+                                                    'newOutputTokens': [],
+                                                    'newIntInputTxs': [],
+                                                    'newIntOutputTxs': []}
+                elif transaction['to'] != '':
                     addresses[transaction['to']]['newInputTxs'].append(
                         (transaction['hash'], transaction['value'], transaction['timestamp']))
                 transactions[transaction['hash']] = transaction
@@ -235,7 +251,7 @@ class DatabaseUpdater:
                     blocks[block_hash]['transactions'] = blocks[block_hash]['transactions'][:-1]
 
         transactions, addresses, address_code_asoc = self.gather_receipts(transactions, addresses)
-        return (transactions, addresses, address_code_asoc)
+        return (transactions, addresses, address_code_asoc, internal_tx_asoc)
 
     def gather_receipts(self, transactions: Dict, addresses: Dict) -> Tuple[Dict, Dict]:
         """
@@ -262,7 +278,9 @@ class DatabaseUpdater:
                                                           'newInputTxs': [],
                                                           'newOutputTxs': [],
                                                           'newInputTokens': [],
-                                                          'newOutputTokens': []}
+                                                          'newOutputTokens': [],
+                                                          'newIntInputTxs': [],
+                                                          'newIntOutputTxs': []}
 
         with open(self.datapath + 'logs.csv') as csv_f:
             csv_logs = csv.DictReader(csv_f, delimiter=',')
@@ -340,31 +358,78 @@ class DatabaseUpdater:
 
         return (tokens, token_txs)
 
-    def add_trace_addresses(self, addresses: Dict, first_block: int, last_block: int) -> Dict:
+    def gather_internal_txs(self, addresses: Dict, transactions: Dict, int_tx_asoc: Dict) -> Dict:
         """
-        Adds trace addresses to a list of addresses.
+        Gathers internal transactions.
 
         Args:
             addresses: Already gathered addresses.
-            first_block: Start of the block range.
-            last_block: End block of the block range.
+            transactions: Gathered normal transactions.
+            int_tx_asoc: Dictionary containing asociative info of txs and internal txs.
 
         Returns:
             Full address list.
         """
-        address_gatherer = TraceAddressGatherer(self._interface)
-        trace_addresses = address_gatherer._gather_addresses(first_block, last_block)
+        internal_txs = {}
+        txs_write_dict = {}
+        with open(self.datapath + 'traces.csv') as csv_f:
+            csv_int_tx = csv.DictReader(csv_f, delimiter=',')
+            for csv_tx in csv_int_tx:
+                int_tx = {}
+                int_tx['from'] = csv_tx['from_address']
+                int_tx['to'] = csv_tx['to_address']
+                int_tx['value'] = csv_tx['value']
+                int_tx['input'] = csv_tx['input']
+                int_tx['output'] = csv_tx['output']
+                int_tx['traceType'] = csv_tx['trace_type']
+                int_tx['callType'] = csv_tx['call_type']
+                int_tx['rewardType'] = csv_tx['reward_type']
+                int_tx['gas'] = csv_tx['gas']
+                int_tx['gasUsed'] = csv_tx['gas_used']
+                tx_hash = int_tx_asoc[csv_tx['block_number'] + '-' + csv_tx['transaction_index']]
+                int_tx['transactionHash'] = tx_hash
+                int_tx['timestamp'] = transactions[tx_hash]['timestamp']
+                int_tx['error'] = csv_tx['error']
 
-        for address in trace_addresses:
-            if address not in addresses:
-                addresses[address] = {'code': '0x',
-                                      'mined': [],
-                                      'newInputTxs': [],
-                                      'newOutputTxs': [],
-                                      'newInputTokens': [],
-                                      'newOutputTokens': []}
+                self._highest_internal_tx += 1
+                internal_txs[self._highest_internal_tx] = int_tx
+                transactions[tx_hash]['internalTxIndex'] += 1
+                str_index = str(transactions[tx_hash]['internalTxIndex'])
+                txs_write_dict[tx_hash + '-tit-' + str_index] = (
+                    self._highest_internal_tx)
+                
+                if int_tx['from'] not in addresses and int_tx['from'] != '':
+                    addresses[int_tx['from']] = {'code': '0x',
+                                                 'mined': [],
+                                                 'newInputTxs': [],
+                                                 'newOutputTxs': [],
+                                                 'newInputTokens': [],
+                                                 'newOutputTokens': [],
+                                                 'newIntInputTxs': [],
+                                                 'newIntOutputTxs': [(self._highest_internal_tx,
+                                                                      int_tx['value'],
+                                                                      int_tx['timestamp'])]}
+                elif int_tx['from'] != '':
+                    addresses[int_tx['from']]['newIntOutputTxs'].append(
+                        (self._highest_internal_tx, int_tx['value'], int_tx['timestamp']))
 
-        return addresses
+                if int_tx['to'] not in addresses and int_tx['to'] != '':
+                    addresses[int_tx['to']] = {'code': '0x',
+                                               'mined': [],
+                                               'newInputTxs': [],
+                                               'newOutputTxs': [],
+                                               'newInputTokens': [],
+                                               'newOutputTokens': [],
+                                               'newIntInputTxs': [(self._highest_internal_tx,
+                                                                   int_tx['value'],
+                                                                   int_tx['timestamp'])],
+                                               'newIntOutputTxs': []}
+                elif int_tx['to'] != '':
+                    addresses[int_tx['to']]['newIntInputTxs'].append(
+                        (self._highest_internal_tx, int_tx['value'], int_tx['timestamp']))
+
+                internal_txs[self._highest_internal_tx] = int_tx
+        return (addresses, transactions, txs_write_dict, internal_txs)
 
     def fill_addresses(self, addresses: Dict, transactions: Dict,
                        tokens: Dict, token_txs: List) -> Tuple[Dict, Dict]:
@@ -396,24 +461,35 @@ class DatabaseUpdater:
                 last_output_tx_index = int(existing_address['outputTxIndex'])
                 last_input_token_tx_index = int(existing_address['inputTokenTxIndex'])
                 last_output_token_tx_index = int(existing_address['outputTokenTxIndex'])
+                last_input_int_tx_index = int(existing_address['inputIntTxIndex'])
+                last_output_int_tx_index = int(existing_address['outputIntTxIndex'])
                 last_mined_block_index = int(existing_address['minedIndex'])
             else:
                 last_input_tx_index = 0
                 last_output_tx_index = 0
                 last_input_token_tx_index = 0
                 last_output_token_tx_index = 0
+                last_input_int_tx_index = 0
+                last_output_int_tx_index = 0
                 last_mined_block_index = 0
 
             address_encode = {}
-            if 'tokenContract' in addr_dict:
-                address_encode['tokenContract'] = addr_dict['tokenContract']
-                if addr_hash in tokens:
-                    tokens[addr_hash]['type'] = addr_dict['tokenContract']
+            if existing_data is not None:
+                address_encode['tokenContract'] = existing_address['tokenContract']
             else:
-                address_encode['tokenContract'] = 'False'
+                if 'tokenContract' in addr_dict:
+                    address_encode['tokenContract'] = addr_dict['tokenContract']
+                    if addr_hash in tokens:
+                        tokens[addr_hash]['type'] = addr_dict['tokenContract']
+                else:
+                    address_encode['tokenContract'] = 'False'
 
             address_encode['balance'] = 'null'
-            address_encode['code'] = addr_dict['code']
+            if existing_data is not None:
+                address_encode['code'] = existing_address['code']
+            else:
+                address_encode['code'] = addr_dict['code']
+
             for input_tx in addr_dict['newInputTxs']:
                 last_input_tx_index += 1
                 addresses_write_dict[addr_hash + '-i-' + str(last_input_tx_index)] = (
@@ -430,13 +506,51 @@ class DatabaseUpdater:
             address_encode['outputTxIndex'] = last_output_tx_index
             address_encode['inputTokenTxIndex'] = last_input_token_tx_index
             address_encode['outputTokenTxIndex'] = last_output_token_tx_index
+            address_encode['inputIntTxIndex'] = last_input_int_tx_index
+            address_encode['outputIntTxIndex'] = last_output_int_tx_index
             address_encode['minedIndex'] = last_mined_block_index
 
             addresses_encode[addr_hash] = address_encode
         # Also add token information to the addresses.
         addresses_encode, updated_tokens, addresses_write_dict = self.fill_addrs_token_txs(
             addresses, addresses_encode, updated_tokens, addresses_write_dict)
+        # Also add internal transactions to addresses
+        addresses_encode, addresses_write_dict = self.fill_addrs_int_txs(
+            addresses, addresses_encode, addresses_write_dict)
+
         return (addresses_encode, addresses_write_dict, updated_tokens, filtered_token_txs)
+
+    def fill_addrs_int_txs(self, addresses: Dict, addresses_encode: Dict,
+                           addresses_write_dict: Dict) -> Tuple[Dict, Dict, Dict]:
+        """
+        Fills address information with internal transactions.
+
+        Args:
+            addresses: Currently processed addresses.
+            addresses_encode: Addresses partially prepared for DB write.
+            addresses_write_dict: Dictionary containing info connecting addresses with their txs.
+
+        Returns:
+            Updated addresses.
+        """
+        for addr_hash, addr_dict in addresses.items():
+            last_input_int_tx_index = addresses_encode[addr_hash]['inputIntTxIndex']
+            last_output_int_tx_index = addresses_encode[addr_hash]['outputIntTxIndex']
+
+            for input_tx in addr_dict['newIntInputTxs']:
+                last_input_int_tx_index += 1
+                addresses_write_dict[addr_hash + '-ii-' + str(last_input_int_tx_index)] = (
+                    str(input_tx[0]) + '-' + str(input_tx[1]) + '-' + str(input_tx[2]))
+            
+            for output_tx in addr_dict['newIntOutputTxs']:
+                last_output_int_tx_index += 1
+                addresses_write_dict[addr_hash + '-io-' + str(last_output_int_tx_index)] = (
+                    str(output_tx[0]) + '-' + str(output_tx[1])+ '-' + str(output_tx[2]))
+
+            addresses_encode[addr_hash]['inputIntTxIndex'] = last_input_int_tx_index
+            addresses_encode[addr_hash]['outputIntTxIndex'] = last_output_int_tx_index
+
+        return (addresses_encode, addresses_write_dict)
 
     def fill_addresses_tokens(self, addresses: Dict, tokens: Dict,
                               token_txs: Dict) -> Tuple[Dict, Dict]:
@@ -452,27 +566,31 @@ class DatabaseUpdater:
             Addresses enriched with token transactions data.
         """
         for token_tx_index, token_tx in token_txs.items():
-            if token_tx['addressFrom'] not in addresses and token_tx['addressFrom'] is not None:
+            if token_tx['addressFrom'] not in addresses and token_tx['addressFrom'] != '':
                 addresses[token_tx['addressFrom']] = {'code': '0x',
                                                       'mined': [],
                                                       'newInputTxs': [],
                                                       'newOutputTxs': [],
                                                       'newInputTokens': [],
                                                       'newOutputTokens': [(token_tx_index,
-                                                                           token_tx['timestamp'])]}
-            elif token_tx['addressFrom'] is not None:
+                                                                           token_tx['timestamp'])],
+                                                      'newIntInputTxs': [],
+                                                      'newIntOutputTxs': []}
+            elif token_tx['addressFrom'] != '':
                 addresses[token_tx['addressFrom']]['newOutputTokens'].append(
                     (token_tx_index, token_tx['timestamp']))
 
-            if token_tx['addressTo'] not in addresses and token_tx['addressTo'] is not None:
+            if token_tx['addressTo'] not in addresses and token_tx['addressTo'] != '':
                 addresses[token_tx['addressTo']] = {'code': '0x',
                                                     'mined': [],
                                                     'newInputTxs': [],
                                                     'newOutputTxs': [],
                                                     'newInputTokens': [(token_tx_index,
                                                                         token_tx['timestamp'])],
-                                                    'newOutputTokens': []}
-            elif token_tx['addressTo'] is not None:
+                                                    'newOutputTokens': [],
+                                                    'newIntInputTxs': [],
+                                                    'newIntOutputTxs': []}
+            elif token_tx['addressTo'] != '':
                 addresses[token_tx['addressTo']]['newInputTokens'].append(
                     (token_tx_index, token_tx['timestamp']))
 
@@ -555,7 +673,7 @@ class DatabaseUpdater:
 
     def update_bulk_db(self, blocks: Dict, transactions: Dict, addresses: Dict,
                        tokens: Dict, addresses_write_dict: Dict, token_txs: Dict,
-                       address_code_asoc: Dict) -> None:
+                       address_code_asoc: Dict, internal_txs: Dict, int_tx_asoc: Dict) -> None:
         """
         Updates the database with bulk data.
 
@@ -567,6 +685,8 @@ class DatabaseUpdater:
             addresses_write_dict: Data connecting addresses to their blocks/txs.
             token_txs: Dictionary containing token transactions.
             address_code_asoc: Contract codes of addresses (saved separately due to lot of data).
+            internal_txs: Internal transactions ti be written to DB.
+            int_tx_asoc: Associations between internal txs and txs.
         """
         LOG.info('Writing to database.')
         wb = rocksdb.WriteBatch()
@@ -603,6 +723,13 @@ class DatabaseUpdater:
         
         for code_key, code_data in address_code_asoc.items():
             wb.put(code_key.encode(), code_data.encode())
+        
+        for tx_key, tx_data in int_tx_asoc.items():
+            wb.put(b'associated-data-' + tx_key.encode(), str(tx_data).encode())
+        
+        for internal_tx_index, internal_tx_dict in internal_txs.items():
+            internal_tx_value = coder.encode_internal_tx(internal_tx_dict)
+            wb.put(b'internal-tx-' + str(internal_tx_index).encode(), internal_tx_value)
 
         self.db.write(wb)
 
