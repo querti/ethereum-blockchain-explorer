@@ -76,22 +76,24 @@ class BalanceUpdater:
         it = 0
         with open(self.datapath + 'addresses.txt') as f:
             while continue_iteration:
-                LOG.info('Updating balances: {0:.2f}%'.format(
-                    (it / (addr_count / self._bulk_size)) * 100))
+                progress = (it / (addr_count / self._bulk_size)) * 100
+                if progress > 100.00:
+                    progress = 100.00
+                LOG.info('Updating balances: {0:.2f}%'.format(progress))
                 addresses = []
                 for i in range(self._bulk_size):
                     line = f.readline()
                     if it > (addr_count / self._bulk_size):
                         continue_iteration = False
                         break
-                    if line != '':
+                    if line != '' and line != '\n':
                         addresses.append(line[:-1])
                 it += 1
                 balances = balance_gatherer._gather_balances(addresses, blockchain_height)
                 self._update_db_balances(balances)
 
-        if os.path.exists(self.datapath + 'addresses.txt'):
-            os.remove(self.datapath + 'addresses.txt')
+        #if os.path.exists(self.datapath + 'addresses.txt'):
+        #    os.remove(self.datapath + 'addresses.txt')
 
     def _update_db_balances(self, addr_balances: Dict) -> None:
         """

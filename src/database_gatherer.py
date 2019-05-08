@@ -271,6 +271,7 @@ class DatabaseGatherer:
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
+
         input_transactions = []  # type: List[Dict]
         output_transactions = []  # type: List[Dict]
 
@@ -333,6 +334,10 @@ class DatabaseGatherer:
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
+
+        if address['code'] != '0x':
+            raw_code = self.db.get(b'address-contract-' + address['code'].encode())
+            address['code'] = raw_code.decode()
 
         input_tx_hashes = []  # type: List[bytes]
         output_tx_hashes = []  # type: List[bytes]

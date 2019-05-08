@@ -53,6 +53,7 @@ class DatabaseUpdater:
             data = f.read().split('\n')
             self._highest_block = int(data[0])
             self._highest_token_tx = int(data[1])
+            self._highest_contract_code = int(data[2])
 
         if interface[-4:] == '.ipc':
             self._interface = 'file://' + interface
@@ -76,13 +77,13 @@ class DatabaseUpdater:
                 stop_iteration = True
             else:
                 latest_block = self._highest_block + self._bulk_size
-            # if self._highest_block + self._bulk_size > 30000:
-            #     break
+            if self._highest_block + self._bulk_size > 30000:
+                break
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)
 
             # Parse the data
-            blocks, transactions, addresses = self.gather_blocks()
+            blocks, transactions, addresses, address_code_asoc = self.gather_blocks()
             if self.gather_tokens_arg:
                 tokens, token_txs = self.gather_tokens(transactions)
             else:
@@ -99,10 +100,12 @@ class DatabaseUpdater:
                                                                                      tokens,
                                                                                      token_txs)
             self.update_bulk_db(blocks, transactions, addresses, tokens,
-                                addresses_write_dict, token_txs)
+                                addresses_write_dict, token_txs, address_code_asoc)
             self._highest_block = latest_block
             with open(self.datapath + 'progress.txt', 'w') as f:
-                f.write('{}\n{}'.format(self._highest_block, self._highest_token_tx))
+                f.write('{}\n{}\n{}'.format(self._highest_block,
+                                            self._highest_token_tx,
+                                            self._highest_contract_code))
 
             if stop_iteration:
                 break
@@ -153,7 +156,7 @@ class DatabaseUpdater:
                 blocks[block['hash']] = block
                 miners.append((block['miner'], block['hash']))
 
-        transactions, addresses = self.gather_transactions(blocks)
+        transactions, addresses, address_code_asoc = self.gather_transactions(blocks)
         for miner in miners:
             if miner[0] not in addresses and miner[0] is not None:
                 addresses[miner[0]] = {'code': '0x',
@@ -165,7 +168,7 @@ class DatabaseUpdater:
             elif miner[0] is not None:
                 addresses[miner[0]]['mined'].append(miner[1])
 
-        return (blocks, transactions, addresses)
+        return (blocks, transactions, addresses, address_code_asoc)
 
     def gather_transactions(self, blocks: Dict) -> Tuple[Dict, Dict]:
         """
@@ -231,8 +234,8 @@ class DatabaseUpdater:
                         and blocks[block_hash]['transactions'][-1] == '+'):
                     blocks[block_hash]['transactions'] = blocks[block_hash]['transactions'][:-1]
 
-        transactions, addresses = self.gather_receipts(transactions, addresses)
-        return (transactions, addresses)
+        transactions, addresses, address_code_asoc = self.gather_receipts(transactions, addresses)
+        return (transactions, addresses, address_code_asoc)
 
     def gather_receipts(self, transactions: Dict, addresses: Dict) -> Tuple[Dict, Dict]:
         """
@@ -252,14 +255,15 @@ class DatabaseUpdater:
                 transactions[row['transaction_hash']]['contractAddress'] = row['contract_address']
 
                 if (row['contract_address'] not in addresses
-                        and row['contract_address'] is not None):
+                        and row['contract_address'] != ''):
                     code = self._blockchain.get_code(row['contract_address'])
-                    addresses[row['contract_address']] = {'code': code.hex(),
+                    addresses[row['contract_address']] = {'code': '0x',
                                                           'mined': [],
                                                           'newInputTxs': [],
                                                           'newOutputTxs': [],
                                                           'newInputTokens': [],
                                                           'newOutputTokens': []}
+
         with open(self.datapath + 'logs.csv') as csv_f:
             csv_logs = csv.DictReader(csv_f, delimiter=',')
             for row in csv_logs:
@@ -282,7 +286,20 @@ class DatabaseUpdater:
 
                 transactions[row['transaction_hash']]['logs'] += topic + '|'
 
-        return (transactions, addresses)
+        address_code_asoc = {}
+        with open(self.datapath + 'contracts.csv') as csv_f:
+            csv_contracts = csv.DictReader(csv_f, delimiter=',')
+            for row in csv_contracts:
+                self._highest_contract_code += 1
+                address_code_asoc['address-contract-' + str(self._highest_contract_code)] = (
+                    row['bytecode'])
+                addresses[row['address']]['code'] = str(self._highest_contract_code)
+                if row['is_erc20'] == 'True':
+                    addresses[row['address']]['tokenContract'] = 'ERC-20'
+                if row['is_erc721'] == 'True':
+                    addresses[row['address']]['tokenContract'] = 'ERC-721'
+
+        return (transactions, addresses, address_code_asoc)
 
     def gather_tokens(self, transactions: Dict) -> Tuple[Dict, List]:
         """
@@ -306,15 +323,6 @@ class DatabaseUpdater:
                 token['txIndex'] = 0
                 token['transactions'] = []
                 tokens[row['address']] = token
-
-        with open(self.datapath + 'contracts.csv') as csv_f:
-            csv_contracts = csv.DictReader(csv_f, delimiter=',')
-            for row in csv_contracts:
-                if row['address'] in tokens:
-                    if row['is_erc20'] == 'True':
-                        tokens[row['address']]['type'] = 'ERC-20'
-                    elif row['is_erc721']:
-                        tokens[row['address']]['type'] = 'ERC-721'
 
         token_txs = []
         with open(self.datapath + 'token_transfers.csv') as csv_f:
@@ -397,11 +405,10 @@ class DatabaseUpdater:
                 last_mined_block_index = 0
 
             address_encode = {}
-            if addr_hash in tokens:
-                if tokens[addr_hash]['type'] == 'ERC-20':
-                    address_encode['tokenContract'] = 'ERC-20'
-                elif tokens[addr_hash]['type'] == 'ERC-721':
-                    address_encode['tokenContract'] = 'ERC-721'
+            if 'tokenContract' in addr_dict:
+                address_encode['tokenContract'] = addr_dict['tokenContract']
+                if addr_hash in tokens:
+                    tokens[addr_hash]['type'] = addr_dict['tokenContract']
             else:
                 address_encode['tokenContract'] = 'False'
 
@@ -499,6 +506,10 @@ class DatabaseUpdater:
                 full_tokens[token_tx['tokenAddress']] = tokens[token_tx['tokenAddress']]
                 self._highest_token_tx += 1
                 filtered_txs[self._highest_token_tx] = token_tx
+        
+        for token in tokens:
+            if token not in full_tokens:
+                full_tokens[token] = tokens[token]
 
         return (full_tokens, filtered_txs)
 
@@ -543,7 +554,8 @@ class DatabaseUpdater:
         return (addresses_encode, tokens, addresses_write_dict)
 
     def update_bulk_db(self, blocks: Dict, transactions: Dict, addresses: Dict,
-                       tokens: Dict, addresses_write_dict: Dict, token_txs: Dict) -> None:
+                       tokens: Dict, addresses_write_dict: Dict, token_txs: Dict,
+                       address_code_asoc: Dict) -> None:
         """
         Updates the database with bulk data.
 
@@ -554,6 +566,7 @@ class DatabaseUpdater:
             tokens: Dictionary containing tokens.
             addresses_write_dict: Data connecting addresses to their blocks/txs.
             token_txs: Dictionary containing token transactions.
+            address_code_asoc: Contract codes of addresses (saved separately due to lot of data).
         """
         LOG.info('Writing to database.')
         wb = rocksdb.WriteBatch()
@@ -587,6 +600,9 @@ class DatabaseUpdater:
 
         for addr_key, addr_data in addresses_write_dict.items():
             wb.put(b'associated-data-' + str(addr_key).encode(), str(addr_data).encode())
+        
+        for code_key, code_data in address_code_asoc.items():
+            wb.put(code_key.encode(), code_data.encode())
 
         self.db.write(wb)
 

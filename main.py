@@ -81,7 +81,7 @@ def init_data_dir(datapath: str):
 
     if not os.path.exists(datapath + '/progress.txt'):
         with open(datapath + '/progress.txt', 'w+') as f:
-            f.write('0\n0')
+            f.write('0\n0\n0')
 
 
 def main():
