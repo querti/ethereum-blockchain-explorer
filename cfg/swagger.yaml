@@ -199,6 +199,11 @@ paths:
           description: Maximum transferred currency (implicitly infinity).
           type: string
           required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
       responses:
         200:
           description: Successfully retrieved the transactions.
@@ -242,6 +247,11 @@ paths:
           description: Maximum transferred currency (implicitly infinity).
           type: string
           required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
       responses:
         200:
           description: Successfully retrieved the transactions.
@@ -250,6 +260,174 @@ paths:
             description: Array of retrieved transactions.
             items:
               $ref: '#/definitions/Transaction'
+  /int-txs-addr:
+    get:
+      operationId: src.endpoints.transactions.get_internal_transactions_by_address
+      tags:
+        - transactions
+      summary: Get all internal transactions of a specified address with the possibility to filter by datetimes and amount exchanged.
+      description: Get all internal transactions of a specified address with the possibility to filter by datetimes and amount exchanged.
+      parameters:
+        - name: address
+          in: query
+          description: Ethereum blockchain address.
+          type: string
+          required: True
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginning of the blockchain).
+          type: string
+          required: false
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: val_from
+          in: query
+          description: Minimum transferred currency (implicitly 0).
+          type: string
+          required: False
+        - name: val_to
+          in: query
+          description: Maximum transferred currency (implicitly infinity).
+          type: string
+          required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the internal transactions.
+          schema:
+            type: array
+            description: Array of retrieved internal transactions.
+            items:
+              $ref: '#/definitions/InternalTransaction'  
+  /addrs/{addresses}/int-txs:
+    get:
+      operationId: src.endpoints.transactions.get_internal_transactions_by_addresses
+      tags:
+        - transactions
+      summary: Get all internal transactions of specified addresses with the possibility to filter by datetimes and amount exchanged.
+      description: Get all intenral transactions of specified addresses with the possibility to filter by datetimes and amount exchanged.
+      parameters:
+        - name: addresses
+          in: path
+          description: Ethereum blockchain address.
+          type: array
+          required: True
+          items:
+            type: string
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginning of the blockchain).
+          type: string
+          required: False
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: val_from
+          in: query
+          description: Minimum transferred currency (implicitly 0).
+          type: string
+          required: False
+        - name: val_to
+          in: query
+          description: Maximum transferred currency (implicitly infinity).
+          type: string
+          required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the internal transactions.
+          schema:
+            type: array
+            description: Array of retrieved internal transactions.
+            items:
+              $ref: '#/definitions/InternalTransaction'
+  /token-txs-addr:
+    get:
+      operationId: src.endpoints.transactions.get_token_transactions_by_address
+      tags:
+        - transactions
+      summary: Get all token transactions of a specified address with the possibility to filter by datetimes and amount exchanged.
+      description: Get all token transactions of a specified address with the possibility to filter by datetimes and amount exchanged.
+      parameters:
+        - name: address
+          in: query
+          description: Ethereum blockchain address.
+          type: string
+          required: True
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginning of the blockchain).
+          type: string
+          required: false
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the token transactions.
+          schema:
+            type: array
+            description: Array of retrieved token transactions.
+            items:
+              $ref: '#/definitions/TokenTransaction'  
+  /addrs/{addresses}/token-txs:
+    get:
+      operationId: src.endpoints.transactions.get_token_transactions_by_addresses
+      tags:
+        - transactions
+      summary: Get all token transactions of specified addresses with the possibility to filter by datetimes and amount exchanged.
+      description: Get all token transactions of specified addresses with the possibility to filter by datetimes and amount exchanged.
+      parameters:
+        - name: addresses
+          in: path
+          description: Ethereum blockchain address.
+          type: array
+          required: True
+          items:
+            type: string
+        - name: time_from
+          in: query
+          description: Start datetime (implicitly beginning of the blockchain).
+          type: string
+          required: False
+        - name: time_to
+          in: query
+          description: End datetime (implicitly ending of the blockchain).
+          type: string
+          required: False
+        - name: no_tx_list
+          in: query
+          description: Limit the number of fetched transactions of the address (implicitly all transactions).
+          type: string
+          required: False
+      responses:
+        200:
+          description: Successfully retrieved the token transactions.
+          schema:
+            type: array
+            description: Array of retrieved token transactions.
+            items:
+              $ref: '#/definitions/TokenTransaction'
   /addr/{addr}:
     get:
       operationId: src.endpoints.addresses.read_address

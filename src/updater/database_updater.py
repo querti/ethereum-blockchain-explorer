@@ -8,7 +8,6 @@ import rocksdb
 
 import src.coder as coder
 from src.blockchain_wrapper import BlockchainWrapper
-from src.requests.traces import TraceAddressGatherer
 from src.updater.data_retriever import DataRetriever
 from src.updater.balance_updater import BalanceUpdater
 
@@ -26,7 +25,8 @@ class DatabaseUpdater:
                  bulk_size: int,
                  internal_transactions: bool = False,
                  datapath: str = 'data/',
-                 gather_tokens_arg: bool = True) -> None:
+                 gather_tokens_arg: bool = True,
+                 max_workers: int = 10) -> None:
         """
         Initialization.
 
@@ -41,6 +41,7 @@ class DatabaseUpdater:
             internal_txs: Whether to gather internal transactions.
             datapath: Path for temporary file created in DB creation.
             gather_tokens: Whether to also gather token information.
+            max_workers: Maximum workers in Ethereum ETL.
         """
         self._blockchain = BlockchainWrapper(interface, confirmations)
         self.db = db
@@ -49,6 +50,7 @@ class DatabaseUpdater:
         self.internal_txs = internal_transactions
         self.datapath = datapath
         self.gather_tokens_arg = gather_tokens_arg
+        self.max_workers = max_workers
         with open(self.datapath + 'progress.txt', 'r') as f:
             data = f.read().split('\n')
             self._highest_block = int(data[0])
@@ -62,7 +64,7 @@ class DatabaseUpdater:
             self._interface = interface
 
         self.retriever = DataRetriever(self._interface, self.datapath, self.gather_tokens_arg,
-                                       self.internal_txs)
+                                       self.internal_txs, self.max_workers)
         self.balance_updater = BalanceUpdater(self._bulk_size, self.datapath,
                                               self._interface, self.db)
 
@@ -91,6 +93,7 @@ class DatabaseUpdater:
             else:
                 tokens, token_txs = ({}, [])
             txs_write_dict = {}
+            internal_txs = {}
             if self.internal_txs:
                 addresses, transactions, txs_write_dict, internal_txs = (
                     self.gather_internal_txs(addresses, transactions, int_tx_asoc))
@@ -103,15 +106,15 @@ class DatabaseUpdater:
                                                                                      transactions,
                                                                                      tokens,
                                                                                      token_txs)
-            
+
             self.update_bulk_db(blocks, transactions, addresses, tokens, addresses_write_dict,
-                                token_txs, address_code_asoc, internal_txs, int_tx_asoc)
+                                token_txs, address_code_asoc, internal_txs, txs_write_dict)
             self._highest_block = latest_block
             with open(self.datapath + 'progress.txt', 'w') as f:
                 f.write('{}\n{}\n{}\n{}'.format(self._highest_block,
-                                            self._highest_token_tx,
-                                            self._highest_contract_code,
-                                            self._highest_internal_tx))
+                                                self._highest_token_tx,
+                                                self._highest_contract_code,
+                                                self._highest_internal_tx))
 
             if stop_iteration:
                 break
@@ -272,7 +275,6 @@ class DatabaseUpdater:
 
                 if (row['contract_address'] not in addresses
                         and row['contract_address'] != ''):
-                    code = self._blockchain.get_code(row['contract_address'])
                     addresses[row['contract_address']] = {'code': '0x',
                                                           'mined': [],
                                                           'newInputTxs': [],
@@ -397,7 +399,7 @@ class DatabaseUpdater:
                 str_index = str(transactions[tx_hash]['internalTxIndex'])
                 txs_write_dict[tx_hash + '-tit-' + str_index] = (
                     self._highest_internal_tx)
-                
+
                 if int_tx['from'] not in addresses and int_tx['from'] != '':
                     addresses[int_tx['from']] = {'code': '0x',
                                                  'mined': [],
@@ -476,11 +478,13 @@ class DatabaseUpdater:
             address_encode = {}
             if existing_data is not None:
                 address_encode['tokenContract'] = existing_address['tokenContract']
+                if addr_hash in updated_tokens:
+                    updated_tokens[addr_hash]['type'] = existing_address['tokenContract']
             else:
                 if 'tokenContract' in addr_dict:
                     address_encode['tokenContract'] = addr_dict['tokenContract']
-                    if addr_hash in tokens:
-                        tokens[addr_hash]['type'] = addr_dict['tokenContract']
+                    if addr_hash in updated_tokens:
+                        updated_tokens[addr_hash]['type'] = addr_dict['tokenContract']
                 else:
                     address_encode['tokenContract'] = 'False'
 
@@ -541,11 +545,11 @@ class DatabaseUpdater:
                 last_input_int_tx_index += 1
                 addresses_write_dict[addr_hash + '-ii-' + str(last_input_int_tx_index)] = (
                     str(input_tx[0]) + '-' + str(input_tx[1]) + '-' + str(input_tx[2]))
-            
+
             for output_tx in addr_dict['newIntOutputTxs']:
                 last_output_int_tx_index += 1
                 addresses_write_dict[addr_hash + '-io-' + str(last_output_int_tx_index)] = (
-                    str(output_tx[0]) + '-' + str(output_tx[1])+ '-' + str(output_tx[2]))
+                    str(output_tx[0]) + '-' + str(output_tx[1]) + '-' + str(output_tx[2]))
 
             addresses_encode[addr_hash]['inputIntTxIndex'] = last_input_int_tx_index
             addresses_encode[addr_hash]['outputIntTxIndex'] = last_output_int_tx_index
@@ -624,7 +628,7 @@ class DatabaseUpdater:
                 full_tokens[token_tx['tokenAddress']] = tokens[token_tx['tokenAddress']]
                 self._highest_token_tx += 1
                 filtered_txs[self._highest_token_tx] = token_tx
-        
+
         for token in tokens:
             if token not in full_tokens:
                 full_tokens[token] = tokens[token]
@@ -673,7 +677,7 @@ class DatabaseUpdater:
 
     def update_bulk_db(self, blocks: Dict, transactions: Dict, addresses: Dict,
                        tokens: Dict, addresses_write_dict: Dict, token_txs: Dict,
-                       address_code_asoc: Dict, internal_txs: Dict, int_tx_asoc: Dict) -> None:
+                       address_code_asoc: Dict, internal_txs: Dict, txs_write_dict: Dict) -> None:
         """
         Updates the database with bulk data.
 
@@ -686,7 +690,7 @@ class DatabaseUpdater:
             token_txs: Dictionary containing token transactions.
             address_code_asoc: Contract codes of addresses (saved separately due to lot of data).
             internal_txs: Internal transactions ti be written to DB.
-            int_tx_asoc: Associations between internal txs and txs.
+            txs_write_dict: Associations between internal txs and txs.
         """
         LOG.info('Writing to database.')
         wb = rocksdb.WriteBatch()
@@ -720,13 +724,13 @@ class DatabaseUpdater:
 
         for addr_key, addr_data in addresses_write_dict.items():
             wb.put(b'associated-data-' + str(addr_key).encode(), str(addr_data).encode())
-        
+
         for code_key, code_data in address_code_asoc.items():
             wb.put(code_key.encode(), code_data.encode())
-        
-        for tx_key, tx_data in int_tx_asoc.items():
+
+        for tx_key, tx_data in txs_write_dict.items():
             wb.put(b'associated-data-' + tx_key.encode(), str(tx_data).encode())
-        
+
         for internal_tx_index, internal_tx_dict in internal_txs.items():
             internal_tx_value = coder.encode_internal_tx(internal_tx_dict)
             wb.put(b'internal-tx-' + str(internal_tx_index).encode(), internal_tx_value)
@@ -741,6 +745,7 @@ def update_database(db_location: str,
                     process_traces: bool,
                     datapath: str,
                     gather_tokens: bool,
+                    max_workers: int,
                     db: Any = None) -> None:
     """
     Updates database with new entries.
@@ -753,15 +758,16 @@ def update_database(db_location: str,
         process_traces: Whether to get addresses from traces.
         datapath: Path for temporary file created in DB creation.
         gather_tokens: Whether to also gather token information.
+        max_workers: Maximum workers in Ethereum ETL.
         db: Database instance.
     """
     db_updater = DatabaseUpdater(db, interface, confirmations,
-                                 bulk_size, process_traces, datapath, gather_tokens)
+                                 bulk_size, process_traces, datapath, gather_tokens, max_workers)
     # sync occurs multiple times as present will change before sync is completed.
     while True:
         fell_behind = db_updater.fill_database()
         LOG.info('Database update has been completed.')
-        fell_behind = False
+        # fell_behind = False
         # If during sync the updater didn't fall too far behind, consider sync finished
         if not fell_behind:
             break

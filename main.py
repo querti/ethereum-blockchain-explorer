@@ -21,7 +21,8 @@ LOG.setLevel(logging.INFO)
 
 def blockchain_daemon(db_location: str, interface: str, confirmations: int,
                       bulk_size: int, parse_traces: bool,
-                      datapath: str, gather_tokens: bool, refresh: int, db) -> None:
+                      datapath: str, gather_tokens: bool, refresh: int,
+                      max_workers: int, db) -> None:
     """
     Updates the leveldb database while REST API is already running.
 
@@ -34,12 +35,13 @@ def blockchain_daemon(db_location: str, interface: str, confirmations: int,
         datapath: Path for temporary file created in DB creation.
         gather_tokens: Whether to also gather token information.
         refresh: How often should the DB be updated.
+        max_workers: Maximum workers in Ethereum ETL.
     """
     while True:
         sleep(refresh)
         database_updater.update_database(db_location, interface,
                                          confirmations, bulk_size,
-                                         parse_traces, datapath, gather_tokens, db)
+                                         parse_traces, datapath, gather_tokens, max_workers, db)
 
 
 def add_args(parser: Any) -> None:
@@ -57,15 +59,17 @@ def add_args(parser: Any) -> None:
                         help='Minimum number of comfirmations until block can included.')
     parser.add_argument('--refresh', type=int, default=20,
                         help='How many seconds to wait until the next database refresh.')
-    parser.add_argument('--bulk_size', type=int, default=5000,
+    parser.add_argument('--bulk_size', type=int, default=10000,
                         help='How many blocks should be processed at once.')
-    parser.add_argument('--internal_txs', type=bool, default=False,
+    parser.add_argument('--internal_txs', action='store_true',
                         help='Whether to also gather internal transactions.')
     parser.add_argument('--datapath', type=str, default='data/',
                         help='Path, where temporary update data should be saved.'
                              'Warning: It will reach several GBs during the initial sync.')
-    parser.add_argument('--gather_tokens', type=bool, default=False,
+    parser.add_argument('--gather_tokens', action='store_true',
                         help='If the blockchain explorer should also gather token data.')
+    parser.add_argument('--max_workers', type=int, default=10,
+                        help='Maximum number of workers in Ethereum ETL.')
 
 
 def init_data_dir(datapath: str):
@@ -80,7 +84,7 @@ def init_data_dir(datapath: str):
 
     if not os.path.exists(datapath + '/progress.txt'):
         with open(datapath + '/progress.txt', 'w+') as f:
-            f.write('5558416\n0\n0\n0')
+            f.write('0\n0\n0\n0')
 
 
 def main():
@@ -96,9 +100,9 @@ def main():
         datapath = datapath + '/'
     init_data_dir(datapath)
     # Before API interface is started, database is created/updated.
-    database_updater.update_database(args.dbpath, args.interface,
-                                     args.confirmations, args.bulk_size,
-                                     args.internal_txs, datapath, args.gather_tokens, db)
+    database_updater.update_database(args.dbpath, args.interface, args.confirmations,
+                                     args.bulk_size, args.internal_txs, datapath,
+                                     args.gather_tokens, args.max_workers, db)
     read_db = rocksdb.DB(args.dbpath,
                          rocksdb.Options(create_if_missing=True, max_open_files=5000),
                          read_only=True)
@@ -110,7 +114,8 @@ def main():
                                                                   args.internal_txs,
                                                                   datapath,
                                                                   args.gather_tokens,
-                                                                  args.refresh, db))
+                                                                  args.refresh,
+                                                                  args.max_workers, db))
     blockchain_daemon_p.daemon = True
     blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')

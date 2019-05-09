@@ -92,8 +92,8 @@ class BalanceUpdater:
                 balances = balance_gatherer._gather_balances(addresses, blockchain_height)
                 self._update_db_balances(balances)
 
-        #if os.path.exists(self.datapath + 'addresses.txt'):
-        #    os.remove(self.datapath + 'addresses.txt')
+        if os.path.exists(self.datapath + 'addresses.txt'):
+            os.remove(self.datapath + 'addresses.txt')
 
     def _update_db_balances(self, addr_balances: Dict) -> None:
         """

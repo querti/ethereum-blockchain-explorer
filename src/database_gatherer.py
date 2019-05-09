@@ -48,10 +48,8 @@ class DatabaseGatherer:
             return block
 
         for tx_hash in transaction_hashes:
-            raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-            transaction = coder.decode_transaction(raw_tx)
-            transaction['hash'] = tx_hash
-            transactions.append(transaction)
+            transaction = self.get_transaction_by_hash(tx_hash)
+            transactions.append(transaction)  # type: ignore
 
         block['transactions'] = transactions
 
@@ -124,10 +122,8 @@ class DatabaseGatherer:
                 continue
 
             for tx_hash in transaction_hashes:
-                raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-                transaction = coder.decode_transaction(raw_tx)
-                transaction['hash'] = tx_hash
-                transactions.append(transaction)
+                transaction = self.get_transaction_by_hash(tx_hash)
+                transactions.append(transaction)  # type: ignore
 
             block['transactions'] = transactions
             blocks.append(block)
@@ -161,10 +157,8 @@ class DatabaseGatherer:
                 continue
 
             for tx_hash in transaction_hashes:
-                raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
-                transaction = coder.decode_transaction(raw_tx)
-                transaction['hash'] = tx_hash
-                transactions.append(transaction)
+                transaction = self.get_transaction_by_hash(tx_hash)
+                transactions.append(transaction)  # type: ignore
 
             block['transactions'] = transactions
             blocks.append(block)
@@ -188,8 +182,9 @@ class DatabaseGatherer:
         transaction = coder.decode_transaction(raw_tx)
         transaction['hash'] = tx_hash
 
+        internal_tx_indexes = []  # type: List[Any]
         if transaction['internalTxIndex'] > 0:
-            prefix = 'associated-data-' + addr + '-tit-'
+            prefix = 'associated-data-' + tx_hash + '-tit-'
             it = self.db.iteritems()
             it.seek(prefix.encode())
             internal_tx_indexes = list(dict(itertools.takewhile(
@@ -197,13 +192,16 @@ class DatabaseGatherer:
 
         internal_transactions = []
         for tx_index in internal_tx_indexes:
-            tx_decoded = tx_data.decode()
+            tx_decoded = tx_index.decode()
             raw_tx = self.db.get(b'internal-tx-' + tx_decoded.encode())
-            transaction = coder.decode_internal_tx(raw_tx)
-            internal_transactions.append(transaction)
-        
-        del transaction['internalTxIndex']
+            int_tx = coder.decode_internal_tx(raw_tx)
+            internal_transactions.append(int_tx)
+
+        transaction.pop('internalTxIndex', None)
         transaction['internalTransactions'] = internal_transactions
+
+        with open('ddd.d', 'w+') as f:
+            f.write(str(transaction))
 
         return transaction
 
@@ -234,7 +232,7 @@ class DatabaseGatherer:
 
         for tx_hash in transaction_hashes:
             transaction = self.get_transaction_by_hash(tx_hash)
-            transactions.append(transaction)
+            transactions.append(transaction)  # type: ignore
 
         return transactions
 
@@ -260,13 +258,13 @@ class DatabaseGatherer:
 
         for tx_hash in transaction_hashes:
             transaction = self.get_transaction_by_hash(tx_hash)
-            transactions.append(transaction)
+            transactions.append(transaction)  # type: ignore
 
         return transactions
 
     def get_transactions_of_address(self, addr: str, time_from: int, time_to: int,
-                                    val_from: int,
-                                    val_to: int) -> Union[List[Dict[str, Any]], None]:
+                                    val_from: int, val_to: int, no_tx_list: int,
+                                    internal=False) -> Any:
         """
         Get transactions of specified address, with filtering by time and transferred capital.
 
@@ -276,6 +274,8 @@ class DatabaseGatherer:
             time_to: Ending datetime to take transactions from.
             val_from: Minimum transferred currency of the transactions.
             val_to: Maximum transferred currency of transactions.
+            no_tx_list: Maximum transactions to return.
+            internal: Whether this method was called internally.
 
         Returns:
             List of address transactions.
@@ -284,69 +284,6 @@ class DatabaseGatherer:
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
-
-        input_transactions = []  # type: List[Dict]
-        output_transactions = []  # type: List[Dict]
-
-        if address['inputTxIndex'] > 0:
-            prefix = 'associated-data-' + addr + '-i-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            input_tx_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
-        if address['outputTxIndex'] > 0:
-            prefix = 'associated-data-' + addr + '-o-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            output_tx_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
-        input_transactions = []
-        for tx_data in input_tx_hashes:
-            tx_decoded = tx_data.decode()
-            tx_hash, value, timestamp = tx_decoded.split('-')
-            if (time_from <= int(timestamp) and time_to >= int(timestamp)
-                    and val_from <= int(value) and val_to >= int(value)):
-                transaction = self.get_transaction_by_hash(tx_hash)
-                input_transactions.append(transaction)
-
-        output_transactions = []
-        for tx_data in output_tx_hashes:
-            tx_decoded = tx_data.decode()
-            tx_hash, value, timestamp = tx_decoded.split('-')
-            if (time_from <= int(timestamp) and time_to >= int(timestamp)
-                    and val_from <= int(value) and val_to >= int(value)):
-                transaction = self.get_transaction_by_hash(tx_hash)
-                output_transactions.append(transaction)
-
-        return input_transactions + output_transactions
-
-    def get_address(self, addr: str, time_from: int, time_to: int,
-                    val_from: int, val_to: int,
-                    no_tx_list: int) -> Union[List[Dict[str, Any]], None]:
-        """
-        Get information of an address, with the possibility of filtering/limiting transactions.
-
-        Args:
-            addr: Ethereum address.
-            time_from: Beginning datetime to take transactions from.
-            time_to: Ending datetime to take transactions from.
-            val_from: Minimum transferred currency of the transactions.
-            val_to: Maximum transferred currency of transactions.
-            no_tx_list: Maximum transactions to return.
-
-        Returns:
-            Address information along with its transactions.
-        """
-        raw_address = self.db.get(b'address-' + addr.encode())
-        if raw_address is None:
-            return None
-        address = coder.decode_address(raw_address)
-
-        if address['code'] != '0x':
-            raw_code = self.db.get(b'address-contract-' + address['code'].encode())
-            address['code'] = raw_code.decode()
 
         input_tx_hashes = []  # type: List[bytes]
         output_tx_hashes = []  # type: List[bytes]
@@ -376,6 +313,7 @@ class DatabaseGatherer:
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
                 transaction = self.get_transaction_by_hash(tx_hash)
+                transaction.pop('internalTransactions', None)  # type: ignore
                 input_transactions.append(transaction)
                 found_txs += 1
 
@@ -388,14 +326,37 @@ class DatabaseGatherer:
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
                 transaction = self.get_transaction_by_hash(tx_hash)
+                transaction.pop('internalTransactions', None)  # type: ignore
                 output_transactions.append(transaction)
                 found_txs += 1
 
-        del address['inputTxIndex']
-        del address['outputTxIndex']
+        if internal:
+            return (input_transactions, output_transactions)
+        else:
+            return input_transactions + output_transactions
 
-        address['inputTransactions'] = input_transactions
-        address['outputTransactions'] = output_transactions
+    def get_internal_txs_of_address(self, addr: str, time_from: int, time_to: int,
+                                    val_from: int, val_to: int, no_tx_list: int,
+                                    internal=False) -> Any:
+        """
+        Get internal txs of specified address, with filtering by time and transferred capital.
+
+        Args:
+            addr: Ethereum address.
+            time_from: Beginning datetime to take transactions from.
+            time_to: Ending datetime to take transactions from.
+            val_from: Minimum transferred currency of the transactions.
+            val_to: Maximum transferred currency of transactions.
+            no_tx_list: Maximum transactions to return.
+            internal: Whether this method was called internally.
+
+        Returns:
+            List of internal transactions of an address.
+        """
+        raw_address = self.db.get(b'address-' + addr.encode())
+        if raw_address is None:
+            return None
+        address = coder.decode_address(raw_address)
 
         input_int_tx_hashes = []  # type: List[bytes]
         output_int_tx_hashes = []  # type: List[bytes]
@@ -442,22 +403,31 @@ class DatabaseGatherer:
                 output_int_transactions.append(internal_tx)
                 found_txs += 1
 
-        del address['inputIntTxIndex']
-        del address['outputIntTxIndex']
+        if internal:
+            return (input_int_transactions, output_int_transactions)
+        else:
+            return input_int_transactions + output_int_transactions
 
-        address['inputInternalTransactions'] = input_int_transactions
-        address['outputInternalTransactions'] = output_int_transactions
+    def get_token_txs_of_address(self, addr: str, time_from: int, time_to: int,
+                                 no_tx_list: int,
+                                 internal=False) -> Any:
+        """
+        Get token txs of specified address, with filtering by time and transferred capital.
 
-        mined_hashes = []  # type: List[bytes]
-        if address['minedIndex'] > 0:
-            prefix = 'associated-data-' + addr + '-b-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            mined_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
+        Args:
+            addr: Ethereum address.
+            time_from: Beginning datetime to take transactions from.
+            time_to: Ending datetime to take transactions from.
+            no_tx_list: Maximum transactions to return.
+            internal: Whether this method was called internally.
 
-        del address['minedIndex']
-        address['mined'] = list(map(lambda x: x.decode(), mined_hashes))
+        Returns:
+            List of token transactions of an address.
+        """
+        raw_address = self.db.get(b'address-' + addr.encode())
+        if raw_address is None:
+            return None
+        address = coder.decode_address(raw_address)
 
         input_token_txs = []
         output_token_txs = []
@@ -503,8 +473,73 @@ class DatabaseGatherer:
                 output_token_txs.append(token_tx)
                 found_txs += 1
 
-        del address['inputTokenTxIndex']
-        del address['outputTokenTxIndex']
+        if internal:
+            return (input_token_txs, output_token_txs)
+        else:
+            return input_token_txs + output_token_txs
+
+    def get_address(self, addr: str, time_from: int, time_to: int,
+                    val_from: int, val_to: int,
+                    no_tx_list: int) -> Union[List[Dict[str, Any]], None]:
+        """
+        Get information of an address, with the possibility of filtering/limiting transactions.
+
+        Args:
+            addr: Ethereum address.
+            time_from: Beginning datetime to take transactions from.
+            time_to: Ending datetime to take transactions from.
+            val_from: Minimum transferred currency of the transactions.
+            val_to: Maximum transferred currency of transactions.
+            no_tx_list: Maximum transactions to return.
+
+        Returns:
+            Address information along with its transactions.
+        """
+        raw_address = self.db.get(b'address-' + addr.encode())
+        if raw_address is None:
+            return None
+        address = coder.decode_address(raw_address)
+
+        if address['code'] != '0x':
+            raw_code = self.db.get(b'address-contract-' + address['code'].encode())
+            address['code'] = raw_code.decode()
+
+        input_transactions, output_transactions = (
+            self.get_transactions_of_address(addr, time_from, time_to, val_from, val_to,
+                                             no_tx_list, True))
+
+        address.pop('inputTxIndex', None)
+        address.pop('outputTxIndex', None)
+
+        address['inputTransactions'] = input_transactions
+        address['outputTransactions'] = output_transactions
+
+        input_int_transactions, output_int_transactions = (
+            self.get_internal_txs_of_address(addr, time_from, time_to, val_from, val_to,
+                                             no_tx_list, True))
+
+        address.pop('inputIntTxIndex', None)
+        address.pop('outputIntTxIndex', None)
+
+        address['inputInternalTransactions'] = input_int_transactions
+        address['outputInternalTransactions'] = output_int_transactions
+
+        mined_hashes = []  # type: List[bytes]
+        if address['minedIndex'] > 0:
+            prefix = 'associated-data-' + addr + '-b-'
+            it = self.db.iteritems()
+            it.seek(prefix.encode())
+            mined_hashes = list(dict(itertools.takewhile(
+                lambda item: item[0].startswith(prefix.encode()), it)).values())
+
+        address.pop('minedIndex', None)
+        address['mined'] = list(map(lambda x: x.decode(), mined_hashes))
+
+        input_token_txs, output_token_txs = (
+            self.get_token_txs_of_address(addr, time_from, time_to, no_tx_list, True))
+
+        address.pop('inputTokenTxIndex', None)
+        address.pop('outputTokenTxIndex', None)
 
         address['inputTokenTransactions'] = input_token_txs
         address['outputTokenTransactions'] = output_token_txs
@@ -569,7 +604,7 @@ class DatabaseGatherer:
                 token_txs.append(token_tx)
                 found_txs += 1
 
-        del token['txIndex']
+        token.pop('txIndex', None)
         token['tokenTransactions'] = token_txs
 
         return token

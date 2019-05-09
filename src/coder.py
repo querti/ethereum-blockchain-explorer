@@ -1,5 +1,5 @@
 """Coder for preparing data for DB writes and parsing data from DB reads."""
-from typing import Dict, List, Union
+from typing import Dict, Union
 
 
 def encode_transaction(transaction: Dict) -> bytes:
@@ -67,7 +67,7 @@ def decode_transaction(raw_transaction: bytes) -> Dict:
     transaction['logs'] = tx_items[11]
     transaction['contractAddress'] = tx_items[12]
     transaction['timestamp'] = tx_items[13]
-    transaction['internalTxIndex'] = int(tx_items[14])
+    transaction['internalTxIndex'] = int(tx_items[14])  # type: ignore
 
     logs = []
     if (transaction['logs'] != '' and transaction['logs'][-1] == '|'):
@@ -319,7 +319,6 @@ def encode_internal_tx(internal_tx: Dict) -> bytes:
     internal_tx_str += internal_tx['transactionHash'] + '\0'
     internal_tx_str += internal_tx['timestamp'] + '\0'
     internal_tx_str += internal_tx['error'] + '\0'
-
 
     return internal_tx_str.encode()
 
