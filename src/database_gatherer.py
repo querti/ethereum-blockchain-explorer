@@ -55,7 +55,7 @@ class DatabaseGatherer:
 
         return block
 
-    def get_block_index_by_hash(self, block_index: str) -> Union[str, None]:
+    def get_block_hash_by_index(self, block_index: str) -> Union[str, None]:
         """
         Retrieves block hash by its index.
 
@@ -77,7 +77,7 @@ class DatabaseGatherer:
         Retrieves multiple blocks based on specified datetime range.
 
         Args:
-            limit: Maximum blocks to gether.
+            limit: Maximum blocks to gather.
             block_start: Beginning datetime.
             block_end: End datetime.
 
@@ -199,9 +199,6 @@ class DatabaseGatherer:
 
         transaction.pop('internalTxIndex', None)
         transaction['internalTransactions'] = internal_transactions
-
-        with open('ddd.d', 'w+') as f:
-            f.write(str(transaction))
 
         return transaction
 

@@ -6,7 +6,7 @@ import os
 
 import rocksdb
 
-from src.requests.balances import BalanceGatherer
+from src.request.balances import BalanceGatherer
 import src.coder as coder
 
 LOG = logging.getLogger()

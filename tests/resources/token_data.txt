@@ -1,0 +1,26 @@
+{
+  "address": "0x9724a061eaff6e34f4127272bf84cab690f98339",
+  "decimals": "18",
+  "name": "Tetris",
+  "symbol": "PCC",
+  "tokenTransactions": [
+    {
+      "addressFrom": "0x4d3d0f631e4c3d2bff847c3f692b1d99eb69ce47",
+      "addressTo": "0x4ee9600513cfbb07b7c127e68af8fdf98bb64dbd",
+      "timestamp": "1519245459",
+      "tokenAddress": "0x9724a061eaff6e34f4127272bf84cab690f98339",
+      "transactionHash": "0x8de8b4dbadfffaa918b959b7499444bffcc227b7e4c47167806947f4664d93b8",
+      "value": "999000000000000000000000000"
+    },
+    {
+      "addressFrom": "0x4d3d0f631e4c3d2bff847c3f692b1d99eb69ce47",
+      "addressTo": "0x4ee9600513cfbb07b7c127e68af8fdf98bb64dbd",
+      "timestamp": "1519245379",
+      "tokenAddress": "0x9724a061eaff6e34f4127272bf84cab690f98339",
+      "transactionHash": "0x1d804cb19bb3447b407ee99197d270037635de4dfa024adc25c7232504b6548f",
+      "value": "1000000000000000000000000"
+    }
+  ],
+  "totalSupply": "1000000000000000000000000000",
+  "type": "ERC-20"
+}

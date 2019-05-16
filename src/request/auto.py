@@ -26,8 +26,8 @@ from urllib.parse import urlparse
 
 from web3 import IPCProvider, HTTPProvider
 
-from src.requests.ipc import BatchIPCProvider
-from src.requests.rpc import BatchHTTPProvider
+from src.request.ipc import BatchIPCProvider
+from src.request.rpc import BatchHTTPProvider
 
 DEFAULT_TIMEOUT = 60
 

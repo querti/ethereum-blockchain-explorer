@@ -126,7 +126,7 @@ class DatabaseUpdater:
         self.balance_updater._update_address_balances(last_block)
 
         # Did the DB fall behind during the sync?
-        if self._blockchain.get_height() - self._confirmations - last_block > 10:
+        if self._blockchain.get_height() - self._confirmations - last_block < 3:
             return False
         else:
             return True

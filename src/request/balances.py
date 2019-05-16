@@ -3,8 +3,8 @@
 import json
 from typing import List, Any, Dict
 
-from src.requests.thread_local_proxy import ThreadLocalProxy
-from src.requests.auto import get_provider_from_uri
+from src.request.thread_local_proxy import ThreadLocalProxy
+from src.request.auto import get_provider_from_uri
 
 
 class BalanceGatherer:

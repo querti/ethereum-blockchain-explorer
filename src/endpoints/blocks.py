@@ -47,7 +47,7 @@ def get_hash_by_index(block_index: str) -> None:
         return 'Index {} couldn\'t be parsed'.format(block_index), 400
 
     gatherer = DatabaseGatherer(db)
-    block_hash = gatherer.get_block_index_by_hash(block_index)
+    block_hash = gatherer.get_block_hash_by_index(block_index)
     if block_hash is None:
         return 'Block with index {} not found'.format(block_index), 404
 

@@ -68,7 +68,7 @@ def add_args(parser: Any) -> None:
                              'Warning: It will reach several GBs during the initial sync.')
     parser.add_argument('--gather_tokens', action='store_true',
                         help='If the blockchain explorer should also gather token data.')
-    parser.add_argument('--max_workers', type=int, default=10,
+    parser.add_argument('--max_workers', type=int, default=5,
                         help='Maximum number of workers in Ethereum ETL.')
 
 
