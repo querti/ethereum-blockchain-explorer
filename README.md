@@ -84,8 +84,11 @@ It is a wrapper script which allows the application to recover from these errors
 ## Dependencies
 
 Python dependencies are listed in the `requirements.txt` file.
+
 Other dependencies:
+
 Go Ethereum - https://geth.ethereum.org/
+
 RocksDB - https://rocksdb.org/
 
 The application can be also run in a Docker container using the docker-compose.
@@ -104,6 +107,7 @@ The following data can be tracked by the application:
 * Addresses
 
 Nearly all data provided by the Ethereum node are saved to the database.
+
 The following data type associations are present:
 
 * Blocks -> Transactions
