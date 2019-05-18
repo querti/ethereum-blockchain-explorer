@@ -27,7 +27,6 @@ def read_address(addr: str,
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -111,7 +110,6 @@ def read_addresses(addrs: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),

@@ -55,7 +55,7 @@ class BalanceGatherer:
             height: Block index at which the balance is gathered.
 
         Returns:
-            Dictionary containing address and its balance.
+            Dictionary containing addresses and their balance.
         """
         requests = self._generate_web3_requests(addresses, height)
         response = self._batch_gatherer.make_request(json.dumps(requests))

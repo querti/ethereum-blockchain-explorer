@@ -57,7 +57,7 @@ class BalanceUpdater:
 
         During this update new data will be added to blockchain and thus the DB will be out of date
         by the time it is completed. Small out of date-ness is acceptable but a longer one
-        will probabbly need to trigger a new batch update.
+        will need to trigger a new batch update.
 
         Args:
             blockchain_height: Height at which sync was completed.

@@ -17,7 +17,6 @@ def read_block(block_hash: str) -> None:
 
     Args:
         block_hash: Unique hash of the block.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -36,7 +35,6 @@ def get_hash_by_index(block_index: str) -> None:
 
     Args:
         block_index: Index of the block.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -64,7 +62,6 @@ def get_blocks_by_time(limit: str = '0',
         limit: Maximum blocks to gether.
         block_start: Beginning datetime.
         block_end: End datetime.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -96,14 +93,13 @@ def get_blocks_by_time(limit: str = '0',
 
 
 def get_blocks_by_indexes(index_start: str = 0,
-                          index_end: str = 'max', db=None) -> None:
+                          index_end: str = 'max') -> None:
     """
     Get multiple blocks by index range.
 
     Args:
         index_start: Beginning index.
         index_end: End index.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),

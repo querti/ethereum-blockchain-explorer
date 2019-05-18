@@ -2,16 +2,15 @@ version: '3.3'
 services:
   ebe:
     build:
-      context: ./container
+      context: ./
       dockerfile: Dockerfile
     image: ethereum-explorer
     container_name: ethereum-explorer
     restart: always
     command:
       -printtoconsole
-    ports:
-      - 5000:5000
+    network_mode: "host"
     volumes:
-      - /home/lgallovi/Documents/ethereum:/home/ethereum
-      - /home/lgallovi/Documents/database:/home/db
-      - /home/lgallovi/Documents/data:/home/data
+      - /home/ethereum:/home/ethereum
+      - /home/db:/home/db
+      - /home/data:/home/data

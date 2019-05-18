@@ -26,19 +26,16 @@ class DatabaseUpdater:
                  internal_transactions: bool = False,
                  datapath: str = 'data/',
                  gather_tokens_arg: bool = True,
-                 max_workers: int = 10) -> None:
+                 max_workers: int = 5) -> None:
         """
         Initialization.
-
-        WARNING: Examining traces will reveal more addresses, however the sync
-                 will be significantly slower.
 
         Args:
             db: Database instance.
             interface: Path to the Geth blockchain node.
             confirmations: How many confirmations a block has to have.
             bulk_size: How many blocks to be included in bulk DB update.
-            internal_txs: Whether to gather internal transactions.
+            internal_transactions: Whether to gather internal transactions.
             datapath: Path for temporary file created in DB creation.
             gather_tokens: Whether to also gather token information.
             max_workers: Maximum workers in Ethereum ETL.
@@ -69,9 +66,15 @@ class DatabaseUpdater:
                                               self._interface, self.db)
 
     def fill_database(self) -> bool:
-        """Adds new entries to the database."""
+        """
+        Adds new entries to the database.
+
+        Returns:
+            True if the sync fell behind during balance gathering phase. False otherwise.
+        """
         stop_iteration = False
         batch_index = 0
+
         while True:
             batch_index += 1
             # calculate batch range
@@ -81,35 +84,45 @@ class DatabaseUpdater:
                 stop_iteration = True
             else:
                 latest_block = self._highest_block + self._bulk_size
-            # if self._highest_block + self._bulk_size > 30000:
-            #     break
+
+            # For debugging purposes only
+            if self._highest_block + self._bulk_size > 30000:
+                break
+
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)
 
-            # Parse the data
+            # Gather the block, transaction and address data
             blocks, transactions, addresses, address_code_asoc, int_tx_asoc = self.gather_blocks()
+            # Gather token data (if selected)
             if self.gather_tokens_arg:
                 tokens, token_txs = self.gather_tokens(transactions)
             else:
                 tokens, token_txs = ({}, [])
+
+            # Gather internal transactions (if selected)
             txs_write_dict = {}
             internal_txs = {}
             if self.internal_txs:
                 addresses, transactions, txs_write_dict, internal_txs = (
                     self.gather_internal_txs(addresses, transactions, int_tx_asoc))
-            # every 5th batch, save addresses to file and remove duplicates
+
+            # Every 5th batch, remove duplicate addresses from the address file
             if batch_index % 5 == 0:
                 self.balance_updater._save_addresses(addresses, True)
             else:
                 self.balance_updater._save_addresses(addresses, False)
+
+            # Fill addresses with transaction data
             addresses, addresses_write_dict, tokens, token_txs = self.fill_addresses(addresses,
                                                                                      transactions,
                                                                                      tokens,
                                                                                      token_txs)
-
+            # Write all data to DB
             self.update_bulk_db(blocks, transactions, addresses, tokens, addresses_write_dict,
                                 token_txs, address_code_asoc, internal_txs, txs_write_dict)
             self._highest_block = latest_block
+            # Save progress to file
             with open(self.datapath + 'progress.txt', 'w') as f:
                 f.write('{}\n{}\n{}\n{}'.format(self._highest_block,
                                                 self._highest_token_tx,
@@ -133,12 +146,12 @@ class DatabaseUpdater:
 
         LOG.info('Bulk database update complete.')
 
-    def gather_blocks(self) -> Tuple[Dict, Dict, Dict]:
+    def gather_blocks(self) -> Tuple[Dict, Dict, Dict, Dict, Dict]:
         """
         Create dictionary representation of processed blocks.
 
         Returns:
-            Dictionary of new blocks.
+            Gathered blocks, transactions, addresses, and associating dictionaries.
         """
         LOG.info('Gathering blocks from csv')
         blocks = {}
@@ -181,14 +194,14 @@ class DatabaseUpdater:
 
         return (blocks, transactions, addresses, address_code_asoc, int_tx_asoc)
 
-    def gather_transactions(self, blocks: Dict) -> Tuple[Dict, Dict]:
+    def gather_transactions(self, blocks: Dict) -> Tuple[Dict, Dict, Dict, Dict]:
         """
         Gathers transactions and adds their hashes to blocks, as well as to addresses.
 
         Args:
             blocks: Processed blocks.
 
-        Returns: Gathered transactions and addresses.
+        Returns: Gathered transactions, addresses and associating dictionaries.
         """
         LOG.info('Gathering transactions from csv')
         transactions = {}
@@ -248,6 +261,7 @@ class DatabaseUpdater:
 
                 blocks[transaction['blockHash']]['transactions'] += transaction['hash'] + '+'
 
+            # Remove last separator
             for block_hash in blocks:
                 if (blocks[block_hash]['transactions'] != ''
                         and blocks[block_hash]['transactions'][-1] == '+'):
@@ -256,13 +270,16 @@ class DatabaseUpdater:
         transactions, addresses, address_code_asoc = self.gather_receipts(transactions, addresses)
         return (transactions, addresses, address_code_asoc, internal_tx_asoc)
 
-    def gather_receipts(self, transactions: Dict, addresses: Dict) -> Tuple[Dict, Dict]:
+    def gather_receipts(self, transactions: Dict, addresses: Dict) -> Tuple[Dict, Dict, Dict]:
         """
         Gathers receipts of the transactions.
 
         Args:
             transactions: Dictionary holding all currently proccessed transactions.
             addresses: Dictionary holding all currently processed addresses.
+
+        Returns:
+            Updated transaction and address data, address-contract associating dictionary
         """
         LOG.info('Gathering receipts from csv')
         with open(self.datapath + 'receipts.csv') as csv_f:
@@ -283,7 +300,7 @@ class DatabaseUpdater:
                                                           'newOutputTokens': [],
                                                           'newIntInputTxs': [],
                                                           'newIntOutputTxs': []}
-
+        # Add log data
         with open(self.datapath + 'logs.csv') as csv_f:
             csv_logs = csv.DictReader(csv_f, delimiter=',')
             for row in csv_logs:
@@ -306,6 +323,7 @@ class DatabaseUpdater:
 
                 transactions[row['transaction_hash']]['logs'] += topic + '|'
 
+        # Add contract codes
         address_code_asoc = {}
         with open(self.datapath + 'contracts.csv') as csv_f:
             csv_contracts = csv.DictReader(csv_f, delimiter=',')
@@ -370,7 +388,7 @@ class DatabaseUpdater:
             int_tx_asoc: Dictionary containing asociative info of txs and internal txs.
 
         Returns:
-            Full address list.
+            Updated transactions, addresses, and associating dictionary.
         """
         internal_txs = {}
         txs_write_dict = {}
@@ -647,7 +665,7 @@ class DatabaseUpdater:
             addresses_write_dict: Dictionary containing info connecting addresses with their txs.
 
         Returns:
-            Updated addresses.
+            Updated addresses, tokens, and associating dictionary.
         """
         for addr_hash, addr_dict in addresses.items():
             last_input_token_tx_index = addresses_encode[addr_hash]['inputTokenTxIndex']

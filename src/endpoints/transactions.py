@@ -15,7 +15,6 @@ def read_transaction(tx_hash: str) -> None:
 
     Args:
         tx_hash: Hash of the transaction.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -28,13 +27,12 @@ def read_transaction(tx_hash: str) -> None:
     return transaction
 
 
-def get_transactions_by_bhash(block_hash: str, db=None) -> None:
+def get_transactions_by_bhash(block_hash: str) -> None:
     """
     Get transactions of a block by its hash.
 
     Args:
         block_hash: Hash of the block.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -53,7 +51,6 @@ def get_transactions_by_bindex(block_index: str) -> None:
 
     Args:
         block_index: Index of the block.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -82,7 +79,6 @@ def get_transactions_by_address(address: str,
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -149,7 +145,6 @@ def get_transactions_by_addresses(addresses: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -223,7 +218,6 @@ def get_internal_transactions_by_address(address: str,
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -290,7 +284,6 @@ def get_internal_transactions_by_addresses(addresses: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -360,7 +353,6 @@ def get_token_transactions_by_address(address: str,
         time_from: Beginning datetime to take transactions from.
         time_to: Ending datetime to take transactions from.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
@@ -410,7 +402,6 @@ def get_token_transactions_by_addresses(addresses: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
-        db: Database instance (meant to be filled by the decorator).
     """
     db_path = current_app.config['DB_LOCATION']
     db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
