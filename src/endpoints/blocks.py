@@ -19,7 +19,7 @@ def read_block(block_hash: str) -> None:
         block_hash: Unique hash of the block.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     gatherer = DatabaseGatherer(db)
     block = gatherer.get_block_by_hash(block_hash.lower())
@@ -37,7 +37,7 @@ def get_hash_by_index(block_index: str) -> None:
         block_index: Index of the block.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int(block_index)
@@ -64,7 +64,7 @@ def get_blocks_by_time(limit: str = '0',
         block_end: End datetime.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     if block_end == '':
         block_end = str(int(time.time()) + 1000000)
@@ -102,7 +102,7 @@ def get_blocks_by_indexes(index_start: str = 0,
         index_end: End index.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_index_start = int(index_start)

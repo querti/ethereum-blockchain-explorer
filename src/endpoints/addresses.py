@@ -29,7 +29,7 @@ def read_address(addr: str,
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)
@@ -84,7 +84,7 @@ def get_balance(addr: str) -> None:
         address: Ethereum address.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     gatherer = DatabaseGatherer(db)
     balance = gatherer.get_balance(addr.lower())
@@ -112,7 +112,7 @@ def read_addresses(addrs: List[str],
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)
@@ -193,7 +193,7 @@ def get_token(addr: str,
         return 'Maximum number of transactions {} couldn\'t be parsed.'.format(no_tx_list), 400
 
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     gatherer = DatabaseGatherer(db)
     token = gatherer.get_token(addr.lower(), int_time_from, int_time_to, int_no_tx_list)

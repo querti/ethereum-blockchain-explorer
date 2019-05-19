@@ -96,7 +96,7 @@ def main():
     args = parser.parse_args()
     datapath = args.datapath
 
-    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True, max_open_files=5000))
+    db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True, max_open_files=10000))
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)

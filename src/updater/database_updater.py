@@ -85,9 +85,13 @@ class DatabaseUpdater:
             else:
                 latest_block = self._highest_block + self._bulk_size
 
-            # For debugging purposes only
-            if self._highest_block + self._bulk_size > 30000:
+            if self._highest_block == latest_block:
+                LOG.info('Database up to date, no sync needed.')
                 break
+
+            # For debugging purposes only
+            # if self._highest_block + self._bulk_size > 30000:
+            #     break
 
             # Get data from Node
             self.retriever.create_csv_files(self._highest_block, latest_block)

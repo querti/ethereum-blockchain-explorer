@@ -17,7 +17,7 @@ def read_transaction(tx_hash: str) -> None:
         tx_hash: Hash of the transaction.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     gatherer = DatabaseGatherer(db)
     transaction = gatherer.get_transaction_by_hash(tx_hash.lower())
@@ -35,7 +35,7 @@ def get_transactions_by_bhash(block_hash: str) -> None:
         block_hash: Hash of the block.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     gatherer = DatabaseGatherer(db)
     transactions = gatherer.get_transactions_of_block_by_hash(block_hash.lower())
@@ -53,7 +53,7 @@ def get_transactions_by_bindex(block_index: str) -> None:
         block_index: Index of the block.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     gatherer = DatabaseGatherer(db)
     transactions = gatherer.get_transactions_of_block_by_index(block_index)
@@ -81,7 +81,7 @@ def get_transactions_by_address(address: str,
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)
@@ -147,7 +147,7 @@ def get_transactions_by_addresses(addresses: List[str],
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)
@@ -220,7 +220,7 @@ def get_internal_transactions_by_address(address: str,
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)
@@ -286,7 +286,7 @@ def get_internal_transactions_by_addresses(addresses: List[str],
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)
@@ -355,7 +355,7 @@ def get_token_transactions_by_address(address: str,
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)
@@ -404,7 +404,7 @@ def get_token_transactions_by_addresses(addresses: List[str],
         no_tx_list: Maximum transactions to gather.
     """
     db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                     read_only=True)
     try:
         int_time_from = int(time_from)

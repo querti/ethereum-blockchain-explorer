@@ -19,7 +19,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_block(self):
         """Test validity of block data."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/block_data.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -32,7 +32,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_block_index(self):
         """Test validity of getting block index."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
 
         block_index = '25308'
@@ -44,7 +44,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_blocks_timerange(self):
         """Test validity of block data from a selected time range."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/block_data_timerange.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -58,7 +58,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_blocks_indexes(self):
         """Test validity of block data from a selected index range."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/block_data_indexrange.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -72,7 +72,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_transaction(self):
         """Test validity of transaction data."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/tx_data.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -85,7 +85,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_transactions_of_block_by_hash(self):
         """Test validity of transactions of a block selected by hash."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/block_hash_transactions.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -98,7 +98,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_transactions_of_block_by_index(self):
         """Test validity of transactions of a block selected by index."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/block_index_transactions.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -111,7 +111,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_transactions_of_address(self):
         """Test validity of transactions of an address."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/address_transactions.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -126,7 +126,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_transactions_of_address_filter_time(self):
         """Test validity of transactions of an address. Filter by time."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/address_transactions_filter_time.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -141,7 +141,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_transactions_of_address_filter_value(self):
         """Test validity of transactions of an address. Filter by value."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/address_transactions_filter_value.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -156,7 +156,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_transactions_of_address_limit(self):
         """Test validity of transactions of an address. Limit returned amount."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/address_transactions_filter_limit.txt', 'r') as f:
             compare_data = json.loads(f.read())
@@ -170,7 +170,7 @@ class ValidityTester(unittest.TestCase):
 
     def test_get_token(self):
         """Test validity returning a token and its transactions."""
-        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=5000),
+        db = rocksdb.DB(DB_PATH, rocksdb.Options(create_if_missing=True, max_open_files=10000),
                         read_only=True)
         with open('tests/resources/token_data.txt', 'r') as f:
             compare_data = json.loads(f.read())
