@@ -2,25 +2,23 @@
 
 import logging
 import time
-
-from flask import current_app
-import rocksdb
+from typing import Any
 
 from src.database_gatherer import DatabaseGatherer
+from src.decorator import setup_database
 
 LOG = logging.getLogger()
 
 
-def read_block(block_hash: str) -> None:
+@setup_database
+def read_block(block_hash: str, db: Any = None) -> None:
     """
     Read one block by its hash.
 
     Args:
         block_hash: Unique hash of the block.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     gatherer = DatabaseGatherer(db)
     block = gatherer.get_block_by_hash(block_hash.lower())
     if block is None:
@@ -29,16 +27,15 @@ def read_block(block_hash: str) -> None:
     return block
 
 
-def get_hash_by_index(block_index: str) -> None:
+@setup_database
+def get_hash_by_index(block_index: str, db: Any = None) -> None:
     """
     Get block hash by its index.
 
     Args:
         block_index: Index of the block.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int(block_index)
     except ValueError:
@@ -52,9 +49,11 @@ def get_hash_by_index(block_index: str) -> None:
     return block_hash
 
 
+@setup_database
 def get_blocks_by_time(limit: str = '0',
                        block_start: str = '0',
-                       block_end: str = '') -> None:
+                       block_end: str = '',
+                       db: Any = None) -> None:
     """
     Get multiple blocks by datetime range.
 
@@ -62,10 +61,8 @@ def get_blocks_by_time(limit: str = '0',
         limit: Maximum blocks to gether.
         block_start: Beginning datetime.
         block_end: End datetime.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     if block_end == '':
         block_end = str(int(time.time()) + 1000000)
     try:
@@ -92,18 +89,18 @@ def get_blocks_by_time(limit: str = '0',
     return blocks
 
 
+@setup_database
 def get_blocks_by_indexes(index_start: str = 0,
-                          index_end: str = 'max') -> None:
+                          index_end: str = 'max',
+                          db: Any = None) -> None:
     """
     Get multiple blocks by index range.
 
     Args:
         index_start: Beginning index.
         index_end: End index.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_index_start = int(index_start)
     except ValueError:

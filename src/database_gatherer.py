@@ -2,9 +2,12 @@
 # from multiprocessing import Lock
 from typing import Any, List, Dict, Union
 import logging
-import itertools
+from time import sleep
+
+import rocksdb
 
 import src.coder as coder
+from src.decorator import db_get_wrapper, db_iter_wrapper
 
 LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
@@ -32,12 +35,12 @@ class DatabaseGatherer:
         Returns:
             Dictionary representing the blockchain block.
         """
-        block_index = self.db.get(b'hash-block-' + block_hash.encode())
+        block_index = db_get_wrapper(self.db, b'hash-block-' + block_hash.encode())
         if block_index is None:
             LOG.info('Block of specified hash not found.')
             return None
 
-        raw_block = self.db.get(b'block-' + block_index)
+        raw_block = db_get_wrapper(self.db, b'block-' + block_index)
         block = coder.decode_block(raw_block)
         block['number'] = block_index.decode()
         transaction_hashes = block['transactions'].split('+')
@@ -65,7 +68,7 @@ class DatabaseGatherer:
         Returns:
             Block hash.
         """
-        raw_block = self.db.get(b'block-' + block_index.encode())
+        raw_block = db_get_wrapper(self.db, b'block-' + block_index.encode())
         if raw_block is None:
             return None
         block = coder.decode_block(raw_block)
@@ -86,23 +89,34 @@ class DatabaseGatherer:
         """
         block_indexes = []  # type: List[int]
         blocks = []  # type: List[Dict[str, Any]]
-        counter = 0
-        it = self.db.iteritems()
-        it.seek(b'timestamp-block-' + str(block_start).encode())
-        counter = 0
+        retry_counter = 0
         while True:
-            data = it.get()
-            timestamp = int(data[0].decode().split('-')[-1])
-            block_index = int(data[1].decode())
-            it.__next__()
-            if timestamp < block_start:
-                continue
-            if timestamp > block_end:
+            try:
+                it = self.db.iteritems()
+                it.seek(b'timestamp-block-' + str(block_start).encode())
+                counter = 0
+                while True:
+                    data = it.get()
+                    timestamp = int(data[0].decode().split('-')[-1])
+                    block_index = int(data[1].decode())
+                    it.__next__()
+                    if timestamp < block_start:
+                        continue
+                    if timestamp > block_end:
+                        break
+                    block_indexes.append(block_index)
+                    counter += 1
+                    if (counter >= limit and limit > 0):
+                        break
                 break
-            block_indexes.append(block_index)
-            counter += 1
-            if (counter >= limit and limit > 0):
-                break
+            except rocksdb.errors.RocksIOError as e:
+                if retry_counter >= 10:
+                    LOG.info('Too many failed retries. Stopping.')
+                    raise e
+                if 'No such file or directory' in str(e):
+                    LOG.info('DB lookup failed. Retrying.')
+                    sleep(2)
+                    retry_counter += 1
 
         if block_indexes == []:
             return None
@@ -110,7 +124,7 @@ class DatabaseGatherer:
         # Since DB is working with string-numbers things might be kind of tricky
         block_indexes.sort()
         for block_index in range(block_indexes[0], block_indexes[-1] + 1):
-            raw_block = self.db.get(b'block-' + str(block_index).encode())
+            raw_block = db_get_wrapper(self.db, b'block-' + str(block_index).encode())
             block = coder.decode_block(raw_block)
             block['number'] = block_index
             transaction_hashes = block['transactions'].split('+')
@@ -145,7 +159,7 @@ class DatabaseGatherer:
         blocks = []
 
         for block_index in range(int(index_start), int(index_end) + 1):
-            raw_block = self.db.get(b'block-' + str(block_index).encode())
+            raw_block = db_get_wrapper(self.db, b'block-' + str(block_index).encode())
             block = coder.decode_block(raw_block)
             block['number'] = block_index
             transaction_hashes = block['transactions'].split('+')
@@ -175,7 +189,7 @@ class DatabaseGatherer:
         Returns:
             The desired transaction.
         """
-        raw_tx = self.db.get(b'transaction-' + tx_hash.encode())
+        raw_tx = db_get_wrapper(self.db, b'transaction-' + tx_hash.encode())
         if raw_tx is None:
             LOG.info('Transaction of given hash not found.')
             return None
@@ -185,15 +199,13 @@ class DatabaseGatherer:
         internal_tx_indexes = []  # type: List[Any]
         if transaction['internalTxIndex'] > 0:
             prefix = 'associated-data-' + tx_hash + '-tit-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            internal_tx_indexes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            print('OOO')
+            internal_tx_indexes = db_iter_wrapper(self.db, prefix)
+            print('OOOO')
         internal_transactions = []
         for tx_index in internal_tx_indexes:
             tx_decoded = tx_index.decode()
-            raw_tx = self.db.get(b'internal-tx-' + tx_decoded.encode())
+            raw_tx = db_get_wrapper(self.db, b'internal-tx-' + tx_decoded.encode())
             int_tx = coder.decode_internal_tx(raw_tx)
             internal_transactions.append(int_tx)
 
@@ -213,12 +225,12 @@ class DatabaseGatherer:
         Returns:
             List of specified block transactions.
         """
-        block_index = self.db.get(b'hash-block-' + block_hash.encode())
+        block_index = db_get_wrapper(self.db, b'hash-block-' + block_hash.encode())
         if block_index is None:
             LOG.info('Block of specified hash not found.')
             return None
 
-        raw_block = self.db.get(b'block-' + block_index)
+        raw_block = db_get_wrapper(self.db, b'block-' + block_index)
         block = coder.decode_block(raw_block)
         transaction_hashes = block['transactions'].split('+')
         transactions = []  # type: List[Dict[str, Any]]
@@ -244,7 +256,7 @@ class DatabaseGatherer:
         Returns:
             List of specified block transactions.
         """
-        raw_block = self.db.get(b'block-' + block_index.encode())
+        raw_block = db_get_wrapper(self.db, b'block-' + block_index.encode())
         block = coder.decode_block(raw_block)
         transaction_hashes = block['transactions'].split('+')
         transactions = []  # type: List[Dict[str, Any]]
@@ -277,7 +289,7 @@ class DatabaseGatherer:
         Returns:
             List of address transactions.
         """
-        raw_address = self.db.get(b'address-' + addr.encode())
+        raw_address = db_get_wrapper(self.db, b'address-' + addr.encode())
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
@@ -287,18 +299,10 @@ class DatabaseGatherer:
 
         if address['inputTxIndex'] > 0:
             prefix = 'associated-data-' + addr + '-i-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            input_tx_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            input_tx_hashes = db_iter_wrapper(self.db, prefix)
         if address['outputTxIndex'] > 0:
             prefix = 'associated-data-' + addr + '-o-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            output_tx_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            output_tx_hashes = db_iter_wrapper(self.db, prefix)
         found_txs = 0
 
         input_transactions = []
@@ -350,7 +354,7 @@ class DatabaseGatherer:
         Returns:
             List of internal transactions of an address.
         """
-        raw_address = self.db.get(b'address-' + addr.encode())
+        raw_address = db_get_wrapper(self.db, b'address-' + addr.encode())
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
@@ -360,18 +364,10 @@ class DatabaseGatherer:
 
         if address['inputIntTxIndex'] > 0:
             prefix = 'associated-data-' + addr + '-ii-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            input_int_tx_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            input_int_tx_hashes = db_iter_wrapper(self.db, prefix)
         if address['outputIntTxIndex'] > 0:
             prefix = 'associated-data-' + addr + '-io-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            output_int_tx_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            output_int_tx_hashes = db_iter_wrapper(self.db, prefix)
         found_txs = 0
 
         input_int_transactions = []
@@ -382,7 +378,7 @@ class DatabaseGatherer:
             tx_index, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
-                raw_tx = self.db.get(b'internal-tx-' + tx_index.encode())
+                raw_tx = db_get_wrapper(self.db, b'internal-tx-' + tx_index.encode())
                 internal_tx = coder.decode_internal_tx(raw_tx)
                 input_int_transactions.append(internal_tx)
                 found_txs += 1
@@ -395,7 +391,7 @@ class DatabaseGatherer:
             tx_index, value, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)
                     and val_from <= int(value) and val_to >= int(value)):
-                raw_tx = self.db.get(b'internal-tx-' + tx_index.encode())
+                raw_tx = db_get_wrapper(self.db, b'internal-tx-' + tx_index.encode())
                 internal_tx = coder.decode_internal_tx(raw_tx)
                 output_int_transactions.append(internal_tx)
                 found_txs += 1
@@ -421,7 +417,7 @@ class DatabaseGatherer:
         Returns:
             List of token transactions of an address.
         """
-        raw_address = self.db.get(b'address-' + addr.encode())
+        raw_address = db_get_wrapper(self.db, b'address-' + addr.encode())
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
@@ -434,18 +430,10 @@ class DatabaseGatherer:
 
         if address['inputTokenTxIndex'] > 0:
             prefix = 'associated-data-' + addr + '-ti-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            input_token_tx_indexes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            input_token_tx_indexes = db_iter_wrapper(self.db, prefix)
         if address['outputTokenTxIndex'] > 0:
             prefix = 'associated-data-' + addr + '-to-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            output_token_tx_indexes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            output_token_tx_indexes = db_iter_wrapper(self.db, prefix)
         found_txs = 0
 
         for token_tx_index in input_token_tx_indexes:
@@ -454,7 +442,7 @@ class DatabaseGatherer:
             tx_decoded = token_tx_index.decode()
             tx_index, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)):
-                raw_tx = self.db.get(b'token-tx-' + tx_index.encode())
+                raw_tx = db_get_wrapper(self.db, b'token-tx-' + tx_index.encode())
                 token_tx = coder.decode_token_tx(raw_tx)
                 input_token_txs.append(token_tx)
                 found_txs += 1
@@ -465,7 +453,7 @@ class DatabaseGatherer:
             tx_decoded = token_tx_index.decode()
             tx_index, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)):
-                raw_tx = self.db.get(b'token-tx-' + tx_index.encode())
+                raw_tx = db_get_wrapper(self.db, b'token-tx-' + tx_index.encode())
                 token_tx = coder.decode_token_tx(raw_tx)
                 output_token_txs.append(token_tx)
                 found_txs += 1
@@ -492,13 +480,13 @@ class DatabaseGatherer:
         Returns:
             Address information along with its transactions.
         """
-        raw_address = self.db.get(b'address-' + addr.encode())
+        raw_address = db_get_wrapper(self.db, b'address-' + addr.encode())
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
 
         if address['code'] != '0x':
-            raw_code = self.db.get(b'address-contract-' + address['code'].encode())
+            raw_code = db_get_wrapper(self.db, b'address-contract-' + address['code'].encode())
             address['code'] = raw_code.decode()
 
         input_transactions, output_transactions = (
@@ -524,11 +512,7 @@ class DatabaseGatherer:
         mined_hashes = []  # type: List[bytes]
         if address['minedIndex'] > 0:
             prefix = 'associated-data-' + addr + '-b-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            mined_hashes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            mined_hashes = db_iter_wrapper(self.db, prefix)
         address.pop('minedIndex', None)
         address['mined'] = list(map(lambda x: x.decode(), mined_hashes))
 
@@ -553,7 +537,7 @@ class DatabaseGatherer:
         Returns:
             Current balance of an address.
         """
-        raw_address = self.db.get(b'address-' + addr.encode())
+        raw_address = db_get_wrapper(self.db, b'address-' + addr.encode())
         if raw_address is None:
             return None
         address = coder.decode_address(raw_address)
@@ -574,7 +558,7 @@ class DatabaseGatherer:
         Returns:
             Information about a token.
         """
-        raw_token = self.db.get(b'token-' + addr.encode())
+        raw_token = db_get_wrapper(self.db, b'token-' + addr.encode())
         if raw_token is None:
             return None
         token = coder.decode_token(raw_token)
@@ -583,11 +567,7 @@ class DatabaseGatherer:
         token_tx_indexes = []  # type: List[bytes]
         if token['txIndex'] > 0:
             prefix = 'associated-data-' + addr + '-tt-'
-            it = self.db.iteritems()
-            it.seek(prefix.encode())
-            token_tx_indexes = list(dict(itertools.takewhile(
-                lambda item: item[0].startswith(prefix.encode()), it)).values())
-
+            token_tx_indexes = db_iter_wrapper(self.db, prefix)
         found_txs = 0
         token_txs = []
         for token_tx_index in token_tx_indexes:
@@ -596,7 +576,7 @@ class DatabaseGatherer:
             tx_decoded = token_tx_index.decode()
             tx_index, timestamp = tx_decoded.split('-')
             if (time_from <= int(timestamp) and time_to >= int(timestamp)):
-                raw_tx = self.db.get(b'token-tx-' + tx_index.encode())
+                raw_tx = db_get_wrapper(self.db, b'token-tx-' + tx_index.encode())
                 token_tx = coder.decode_token_tx(raw_tx)
                 token_txs.append(token_tx)
                 found_txs += 1

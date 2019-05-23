@@ -1,24 +1,21 @@
 """Functions for gathering block information from the database."""
 
-from typing import List
+from typing import List, Any
 import time
 
-from flask import current_app
-import rocksdb
-
 from src.database_gatherer import DatabaseGatherer
+from src.decorator import setup_database
 
 
-def read_transaction(tx_hash: str) -> None:
+@setup_database
+def read_transaction(tx_hash: str, db: Any = None) -> None:
     """
     Get transaction by its hash.
 
     Args:
         tx_hash: Hash of the transaction.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     gatherer = DatabaseGatherer(db)
     transaction = gatherer.get_transaction_by_hash(tx_hash.lower())
     if transaction is None:
@@ -27,16 +24,15 @@ def read_transaction(tx_hash: str) -> None:
     return transaction
 
 
-def get_transactions_by_bhash(block_hash: str) -> None:
+@setup_database
+def get_transactions_by_bhash(block_hash: str, db: Any = None) -> None:
     """
     Get transactions of a block by its hash.
 
     Args:
         block_hash: Hash of the block.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     gatherer = DatabaseGatherer(db)
     transactions = gatherer.get_transactions_of_block_by_hash(block_hash.lower())
     if transactions is None:
@@ -45,16 +41,15 @@ def get_transactions_by_bhash(block_hash: str) -> None:
     return transactions
 
 
-def get_transactions_by_bindex(block_index: str) -> None:
+@setup_database
+def get_transactions_by_bindex(block_index: str, db: Any = None) -> None:
     """
     Get transactions of a block by its index.
 
     Args:
         block_index: Index of the block.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     gatherer = DatabaseGatherer(db)
     transactions = gatherer.get_transactions_of_block_by_index(block_index)
     if transactions is None:
@@ -63,12 +58,14 @@ def get_transactions_by_bindex(block_index: str) -> None:
     return transactions
 
 
+@setup_database
 def get_transactions_by_address(address: str,
                                 time_from: str = '0',
                                 time_to: str = '',
                                 val_from: str = '0',
                                 val_to: str = '',
-                                no_tx_list: str = '') -> None:
+                                no_tx_list: str = '',
+                                db: Any = None) -> None:
     """
     Get transactions of an address.
 
@@ -79,10 +76,8 @@ def get_transactions_by_address(address: str,
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -129,12 +124,14 @@ def get_transactions_by_address(address: str,
     return transactions
 
 
+@setup_database
 def get_transactions_by_addresses(addresses: List[str],
                                   time_from: str = '0',
                                   time_to: str = '',
                                   val_from: str = '0',
                                   val_to: str = '',
-                                  no_tx_list: str = '') -> None:
+                                  no_tx_list: str = '',
+                                  db: Any = None) -> None:
     """
     Get transactions of multiple addresses.
 
@@ -145,10 +142,8 @@ def get_transactions_by_addresses(addresses: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -202,12 +197,14 @@ def get_transactions_by_addresses(addresses: List[str],
     return transactions
 
 
+@setup_database
 def get_internal_transactions_by_address(address: str,
                                          time_from: str = '0',
                                          time_to: str = '',
                                          val_from: str = '0',
                                          val_to: str = '',
-                                         no_tx_list: str = '') -> None:
+                                         no_tx_list: str = '',
+                                         db: Any = None) -> None:
     """
     Get internal transactions of an address.
 
@@ -218,10 +215,8 @@ def get_internal_transactions_by_address(address: str,
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -268,12 +263,14 @@ def get_internal_transactions_by_address(address: str,
     return transactions
 
 
+@setup_database
 def get_internal_transactions_by_addresses(addresses: List[str],
                                            time_from: str = '0',
                                            time_to: str = '',
                                            val_from: str = '0',
                                            val_to: str = '',
-                                           no_tx_list: str = '') -> None:
+                                           no_tx_list: str = '',
+                                           db: Any = None) -> None:
     """
     Get internal transactions of multiple addresses.
 
@@ -284,10 +281,8 @@ def get_internal_transactions_by_addresses(addresses: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -341,10 +336,12 @@ def get_internal_transactions_by_addresses(addresses: List[str],
     return transactions
 
 
+@setup_database
 def get_token_transactions_by_address(address: str,
                                       time_from: str = '0',
                                       time_to: str = '',
-                                      no_tx_list: str = '') -> None:
+                                      no_tx_list: str = '',
+                                      db: Any = None) -> None:
     """
     Get token transactions of an address.
 
@@ -353,10 +350,8 @@ def get_token_transactions_by_address(address: str,
         time_from: Beginning datetime to take transactions from.
         time_to: Ending datetime to take transactions from.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -388,10 +383,12 @@ def get_token_transactions_by_address(address: str,
     return transactions
 
 
+@setup_database
 def get_token_transactions_by_addresses(addresses: List[str],
                                         time_from: str = '0',
                                         time_to: str = '',
-                                        no_tx_list: str = '') -> None:
+                                        no_tx_list: str = '',
+                                        db: Any = None) -> None:
     """
     Get token transactions of multiple addresses.
 
@@ -402,10 +399,8 @@ def get_token_transactions_by_addresses(addresses: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:

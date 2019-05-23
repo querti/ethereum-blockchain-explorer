@@ -1,22 +1,20 @@
 """Functions for gathering block information from the database."""
 
-# import plyvel
-# from flask import current_app
-from typing import List
+from typing import List, Any
 import time
 
-from flask import current_app
-import rocksdb
-
 from src.database_gatherer import DatabaseGatherer
+from src.decorator import setup_database
 
 
+@setup_database
 def read_address(addr: str,
                  time_from: str = '0',
                  time_to: str = '',
                  val_from: str = '0',
                  val_to: str = '',
-                 no_tx_list: str = '') -> None:
+                 no_tx_list: str = '',
+                 db: Any = None) -> None:
     """
     Get information about an address, including its transactions.
 
@@ -27,10 +25,8 @@ def read_address(addr: str,
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -76,16 +72,15 @@ def read_address(addr: str,
     return full_address
 
 
-def get_balance(addr: str) -> None:
+@setup_database
+def get_balance(addr: str, db: Any = None) -> None:
     """
     Get balance of an address.
 
     Args:
         address: Ethereum address.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     gatherer = DatabaseGatherer(db)
     balance = gatherer.get_balance(addr.lower())
     if balance is None:
@@ -94,12 +89,14 @@ def get_balance(addr: str) -> None:
     return balance
 
 
+@setup_database
 def read_addresses(addrs: List[str],
                    time_from: str = '0',
                    time_to: str = '',
                    val_from: str = '0',
                    val_to: str = '',
-                   no_tx_list: str = '') -> None:
+                   no_tx_list: str = '',
+                   db: Any = None) -> None:
     """
     Get information about multiple addresses, including their transactions.
 
@@ -110,10 +107,8 @@ def read_addresses(addrs: List[str],
         val_from: Minimum transferred currency of the transactions.
         val_to: Maximum transferred currency of transactions.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     try:
         int_time_from = int(time_from)
     except ValueError:
@@ -160,10 +155,12 @@ def read_addresses(addrs: List[str],
     return full_addresses
 
 
+@setup_database
 def get_token(addr: str,
               time_from: str = '0',
               time_to: str = '',
-              no_tx_list: str = '') -> None:
+              no_tx_list: str = '',
+              db: Any = None) -> None:
     """
     Get information about a token specified by its address.
 
@@ -172,6 +169,7 @@ def get_token(addr: str,
         time_from: Beginning datetime to take token transactions from.
         time_to: Ending datetime to take token transactions from.
         no_tx_list: Maximum transactions to gather.
+        db: Read-only database instance.
     """
     try:
         int_time_from = int(time_from)
@@ -192,9 +190,6 @@ def get_token(addr: str,
     except ValueError:
         return 'Maximum number of transactions {} couldn\'t be parsed.'.format(no_tx_list), 400
 
-    db_path = current_app.config['DB_LOCATION']
-    db = rocksdb.DB(db_path, rocksdb.Options(create_if_missing=True, max_open_files=10000),
-                    read_only=True)
     gatherer = DatabaseGatherer(db)
     token = gatherer.get_token(addr.lower(), int_time_from, int_time_to, int_no_tx_list)
     if token is None:

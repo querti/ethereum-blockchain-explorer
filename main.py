@@ -2,7 +2,7 @@
 """Ethereum blockchain explorer."""
 
 from time import sleep
-from multiprocessing import Process
+from multiprocessing import Process, Lock
 import argparse
 import os
 import sys
@@ -22,7 +22,7 @@ LOG.setLevel(logging.INFO)
 def blockchain_daemon(db_location: str, interface: str, confirmations: int,
                       bulk_size: int, internal_txs: bool,
                       datapath: str, gather_tokens: bool, refresh: int,
-                      max_workers: int, db: Any) -> None:
+                      max_workers: int, db: Any, db_lock: Any) -> None:
     """
     Updates the leveldb database while REST API is already running.
 
@@ -37,12 +37,14 @@ def blockchain_daemon(db_location: str, interface: str, confirmations: int,
         refresh: How often should the DB be updated.
         max_workers: Maximum workers in Ethereum ETL.
         db: Instance of the database.
+        db_lock: Mutex that prevents simultanious DB write and read (to prevent read errors).
     """
     while True:
-        sleep(refresh)
+
         database_updater.update_database(db_location, interface,
-                                         confirmations, bulk_size,
-                                         internal_txs, datapath, gather_tokens, max_workers, db)
+                                         confirmations, bulk_size, internal_txs, datapath,
+                                         gather_tokens, max_workers, db_lock, db)
+        sleep(refresh)
 
 
 def add_args(parser: Any) -> None:
@@ -97,13 +99,10 @@ def main():
     datapath = args.datapath
 
     db = rocksdb.DB(args.dbpath, rocksdb.Options(create_if_missing=True, max_open_files=10000))
+    db_lock = Lock()
     if datapath[-1] != '/':
         datapath = datapath + '/'
     init_data_dir(datapath)
-    # Before API interface is started, database is created/updated.
-    database_updater.update_database(args.dbpath, args.interface, args.confirmations,
-                                     args.bulk_size, args.internal_txs, datapath,
-                                     args.gather_tokens, args.max_workers, db)
 
     blockchain_daemon_p = Process(target=blockchain_daemon, args=(args.dbpath,
                                                                   args.interface,
@@ -113,11 +112,14 @@ def main():
                                                                   datapath,
                                                                   args.gather_tokens,
                                                                   args.refresh,
-                                                                  args.max_workers, db))
+                                                                  args.max_workers,
+                                                                  db,
+                                                                  db_lock))
     blockchain_daemon_p.daemon = True
     blockchain_daemon_p.start()
     app = connexion.App(__name__, specification_dir='cfg/')
     app.app.config['DB_LOCATION'] = args.dbpath
+    app.app.config['DB_LOCK'] = db_lock
     app.add_api('swagger.yaml')
     app.run()
 

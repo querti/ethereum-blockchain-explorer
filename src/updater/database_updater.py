@@ -10,6 +10,7 @@ import src.coder as coder
 from src.blockchain_wrapper import BlockchainWrapper
 from src.updater.data_retriever import DataRetriever
 from src.updater.balance_updater import BalanceUpdater
+from src.decorator import db_get_wrapper
 
 LOG = logging.getLogger()
 
@@ -23,6 +24,7 @@ class DatabaseUpdater:
                  interface: str,
                  confirmations: int,
                  bulk_size: int,
+                 db_lock: Any,
                  internal_transactions: bool = False,
                  datapath: str = 'data/',
                  gather_tokens_arg: bool = True,
@@ -35,6 +37,7 @@ class DatabaseUpdater:
             interface: Path to the Geth blockchain node.
             confirmations: How many confirmations a block has to have.
             bulk_size: How many blocks to be included in bulk DB update.
+            db_lock: Mutex that prevents simultanious DB write and read (to prevent read errors).
             internal_transactions: Whether to gather internal transactions.
             datapath: Path for temporary file created in DB creation.
             gather_tokens: Whether to also gather token information.
@@ -48,6 +51,7 @@ class DatabaseUpdater:
         self.datapath = datapath
         self.gather_tokens_arg = gather_tokens_arg
         self.max_workers = max_workers
+        self.db_lock = db_lock
         with open(self.datapath + 'progress.txt', 'r') as f:
             data = f.read().split('\n')
             self._highest_block = int(data[0])
@@ -63,7 +67,7 @@ class DatabaseUpdater:
         self.retriever = DataRetriever(self._interface, self.datapath, self.gather_tokens_arg,
                                        self.internal_txs, self.max_workers)
         self.balance_updater = BalanceUpdater(self._bulk_size, self.datapath,
-                                              self._interface, self.db)
+                                              self._interface, self.db, self.db_lock)
 
     def fill_database(self) -> bool:
         """
@@ -477,7 +481,7 @@ class DatabaseUpdater:
         addresses_encode = {}
         addresses_write_dict = {}
         for addr_hash, addr_dict in addresses.items():
-            existing_data = self.db.get(b'address-' + addr_hash.encode())
+            existing_data = db_get_wrapper(self.db, b'address-' + addr_hash.encode())
             # Address not yet in records
             if existing_data is not None:
                 existing_address = coder.decode_address(existing_data)
@@ -639,7 +643,7 @@ class DatabaseUpdater:
         full_tokens = {}
         filtered_txs = {}
         for token_tx in token_txs:
-            data = self.db.get(b'token-' + token_tx['tokenAddress'].encode())
+            data = db_get_wrapper(self.db, b'token-' + token_tx['tokenAddress'].encode())
             if data is not None:
                 db_token = coder.decode_token(data)
                 db_token['transactions'] = []
@@ -714,6 +718,8 @@ class DatabaseUpdater:
             internal_txs: Internal transactions ti be written to DB.
             txs_write_dict: Associations between internal txs and txs.
         """
+        self.db_lock.acquire()
+        print('lock started')
         LOG.info('Writing to database.')
         wb = rocksdb.WriteBatch()
         for block_hash, block_dict in blocks.items():
@@ -758,6 +764,8 @@ class DatabaseUpdater:
             wb.put(b'internal-tx-' + str(internal_tx_index).encode(), internal_tx_value)
 
         self.db.write(wb)
+        self.db_lock.release()
+        print('lock ended')
 
 
 def update_database(db_location: str,
@@ -768,6 +776,7 @@ def update_database(db_location: str,
                     datapath: str,
                     gather_tokens: bool,
                     max_workers: int,
+                    db_lock: Any,
                     db: Any = None) -> None:
     """
     Updates database with new entries.
@@ -781,10 +790,11 @@ def update_database(db_location: str,
         datapath: Path for temporary file created in DB creation.
         gather_tokens: Whether to also gather token information.
         max_workers: Maximum workers in Ethereum ETL.
+        db_lock: Mutex that prevents simultanious DB write and read (to prevent read errors).
         db: Database instance.
     """
-    db_updater = DatabaseUpdater(db, interface, confirmations,
-                                 bulk_size, process_traces, datapath, gather_tokens, max_workers)
+    db_updater = DatabaseUpdater(db, interface, confirmations, bulk_size, db_lock, process_traces,
+                                 datapath, gather_tokens, max_workers)
     # sync occurs multiple times as present will change before sync is completed.
     while True:
         fell_behind = db_updater.fill_database()
